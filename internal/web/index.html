@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whydah</title>
+<link rel="icon" type="image/png" href="/icon.png">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f6f4; --surface: #ffffff; --border: #e3e2de; --text: #1d1d1b; --muted: #6b6a66;
+    --accent: #2f6fdf; --accent-text: #ffffff; --ok: #1f8a4c; --err: #c4352b; --warn-bg: #fff6e0; --warn: #8a5a00;
+    --track: #ecebe7; --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --surface: #1f1f1e; --border: #33322f; --text: #ecebe8; --muted: #9a9893;
+      --accent: #5b8ff0; --accent-text: #0d0d0c; --ok: #4cc27c; --err: #f0675c; --warn-bg: #3a2e12; --warn: #f2c66b;
+      --track: #2c2b29;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  header h1 { font-size: 20px; margin: 0; flex: 1; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+  header h1 .logo { border-radius: 6px; display: block; }
+  button { font: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+           border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.link { border: none; background: none; color: var(--muted); padding: 4px 6px; }
+  button.link:hover { color: var(--text); }
+  input, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+                  border-radius: 8px; padding: 8px 10px; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .banner { border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; background: var(--warn-bg); color: var(--warn); }
+  .banner.error { color: var(--err); }
+  .banner.info { background: var(--surface); color: var(--text); border: 1px solid var(--accent); }
+  .banner .actions { margin-top: 8px; }
+  .hint-update { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .hint-update button { margin-left: 4px; padding: 2px 8px; font-size: 13px; }
+  .footer button.link { font-size: 12px; text-decoration: underline; }
+  .banner ul { margin: 4px 0 0; padding-left: 18px; }
+  form.url { display: flex; gap: 8px; margin-bottom: 8px; }
+  form.url input { flex: 1; min-width: 0; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 28px 0 10px;
+       display: flex; align-items: center; justify-content: space-between; }
+  .stack { display: grid; gap: 10px; }
+  .preview { display: grid; grid-template-columns: 160px 1fr; gap: 14px; align-items: start; }
+  .thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; background: var(--track); display: block; }
+  .title { font-weight: 600; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .error-text { color: var(--err); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .error-detail { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .error-detail summary { cursor: pointer; width: fit-content; }
+  .error-detail div { white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 4px; }
+  .job { display: grid; grid-template-columns: 96px 1fr auto; gap: 12px; align-items: center; }
+  .job .thumb { aspect-ratio: 16/9; }
+  .bar { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; margin: 6px 0 4px; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .25s; }
+  .bar.indeterminate > div { width: 30%; animation: slide 1.2s infinite ease-in-out; }
+  .bar.done > div { background: var(--ok); }
+  @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+  .badge { font-size: 12px; font-weight: 600; }
+  .badge.done { color: var(--ok); } .badge.error { color: var(--err); } .badge.canceled { color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  dialog { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text);
+           padding: 20px; width: min(480px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h3 { margin: 0 0 14px; }
+  .field { display: grid; gap: 4px; margin-bottom: 12px; }
+  .field label { font-size: 13px; color: var(--muted); }
+  .check { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .footer { color: var(--muted); font-size: 12px; margin-top: 40px; text-align: center; }
+  .field .example { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .field .example code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .bookmarklet { display: inline-block; padding: 6px 12px; border: 1px dashed var(--accent); border-radius: 8px; color: var(--accent);
+                 text-decoration: none; font-weight: 600; cursor: grab; }
+  #history { width: min(720px, calc(100vw - 32px)); }
+  #history-q { width: 100%; box-sizing: border-box; }
+  #history-list { display: grid; gap: 2px; max-height: min(60vh, 560px); overflow-y: auto; margin-top: 10px; }
+  .past { display: grid; grid-template-columns: 72px 1fr auto; gap: 10px; align-items: center; padding: 6px 4px; border-radius: 6px; }
+  .past:hover { background: var(--track); }
+  .past .thumb { aspect-ratio: 16/9; width: 72px; }
+  .past .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .past .meta { font-size: 12px; }
+  .past .actions { margin-top: 0; flex-wrap: nowrap; }
+  .past .actions button { padding: 2px 8px; font-size: 13px; }
+  .items { grid-column: 1 / -1; border-top: 1px solid var(--border); margin-top: 12px; padding-top: 8px;
+           max-height: 360px; overflow-y: auto; }
+  .items-head { display: flex; gap: 4px; align-items: center; font-size: 13px; color: var(--muted); padding-bottom: 4px; }
+  .item { display: grid; grid-template-columns: auto 3ch 1fr auto; gap: 8px; align-items: center; padding: 5px 2px;
+          font-size: 14px; border-radius: 6px; }
+  .item.no-check { grid-template-columns: 3ch 1fr auto auto; }
+  .item.with-thumb { grid-template-columns: auto 3ch 96px 1fr auto; }
+  .row-thumb { width: 96px; height: 54px; object-fit: cover; border-radius: 4px; background: var(--track); display: block; }
+  img.row-thumb { cursor: zoom-in; }
+  .item:hover { background: var(--track); }
+  .item .num { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+  .item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .status { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .item .status.error { color: var(--err); } .item .status.done { color: var(--ok); }
+  .item button { padding: 2px 8px; font-size: 13px; }
+  .photos { grid-column: 1 / -1; border-top: 1px solid var(--border); margin-top: 12px; padding-top: 8px; }
+  .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px;
+                max-height: 440px; overflow-y: auto; padding: 2px; }
+  .tile { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: var(--track);
+          cursor: pointer; outline: 2px solid transparent; outline-offset: -2px; }
+  .tile.on { outline-color: var(--accent); }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile:not(.on) img { opacity: .35; }
+  .tile input { position: absolute; top: 6px; left: 6px; margin: 0; }
+  .tile .zoom { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; padding: 0; border: none; border-radius: 14px;
+    background: rgba(0, 0, 0, .6); color: #fff; font-size: 15px; line-height: 28px; opacity: 0; cursor: zoom-in; }
+  .tile:hover .zoom, .tile .zoom:focus-visible { opacity: 1; }
+  @media (hover: none) { .tile .zoom { opacity: 1; } }
+  .lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .88); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 56px 16px 16px; }
+  .lightbox img { max-width: 100%; max-height: calc(100vh - 130px); object-fit: contain; border-radius: 6px; }
+  .lightbox .lb-cap { color: #eee; font-size: 14px; text-align: center; padding: 12px 8px 0; max-width: 60em; overflow-wrap: anywhere; }
+  .lightbox .lb-cap span { color: #aaa; }
+  .lightbox .lb-btn { position: absolute; width: 44px; height: 44px; padding: 0; border: none; border-radius: 22px;
+    background: rgba(255, 255, 255, .14); color: #fff; font-size: 24px; line-height: 44px; }
+  .lightbox .lb-btn:hover { background: rgba(255, 255, 255, .26); }
+  .lightbox .lb-btn:disabled { opacity: .25; }
+  .lb-close { top: 10px; right: 10px; } .lb-prev { left: 10px; top: calc(50% - 22px); } .lb-next { right: 10px; top: calc(50% - 22px); }
+  .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 6px; font-size: 11px;
+               background: rgba(0, 0, 0, .55); color: #fff; font-variant-numeric: tabular-nums;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .video { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+  @media (max-width: 560px) {
+    .preview { grid-template-columns: 1fr; }
+    .job { grid-template-columns: 64px 1fr; }
+    .job .job-actions { grid-column: 1 / -1; justify-self: end; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><img class="logo" src="/icon.png" alt="" width="28" height="28">Whydah</h1>
+    <button class="link" id="open-folder" type="button" title="Open the download folder">Open the hold</button>
+    <button class="link" id="open-history" type="button" data-t="ui.history">History</button>
+    <button class="link" id="open-settings" type="button">Settings</button>
+    <button class="link" id="quit" type="button">Quit</button>
+  </header>
+
+  <div id="tools-banner" class="banner" hidden></div>
+  <div id="update-banner" class="banner info" hidden></div>
+
+  <form class="url" id="url-form">
+    <input id="url-input" type="url" placeholder="Paste a link: video, playlist, gallery or any page with photos" autocomplete="off" required>
+    <button class="primary" type="submit" title="Look up what this link has">Spyglass</button>
+  </form>
+  <p class="hint" id="clip-hint"></p>
+
+  <div id="previews" class="stack"></div>
+
+  <h2>The hold <button class="link" id="clear" type="button">Clear finished</button></h2>
+  <div id="jobs" class="stack"><div class="empty">Nothing yet.</div></div>
+
+  <div class="footer" id="footer"></div>
+</main>
+
+<dialog id="settings">
+  <form method="dialog" id="settings-form">
+    <h3>Settings</h3>
+    <div class="field"><label for="s-lang" data-t="ui.language">Language</label><select id="s-lang"></select></div>
+    <div class="field"><label for="s-out">Download folder</label><input id="s-out" required></div>
+    <div class="field"><label for="s-quality">Video quality</label><select id="s-quality"></select></div>
+    <label class="check"><input type="checkbox" id="s-compat"> Prefer MP4 / H.264 (plays everywhere; caps most sites at 1080p)</label>
+    <div class="field"><label for="s-audio">Audio format</label><select id="s-audio"></select></div>
+    <div class="field">
+      <label for="s-names" data-t="ui.names">File names</label>
+      <input id="s-names" autocomplete="off" spellcheck="false">
+      <div class="example" id="s-names-example"></div>
+    </div>
+    <div class="field">
+      <label for="s-browser">Use cookies from browser (for age-restricted, members-only or private posts)</label>
+      <select id="s-browser"></select>
+    </div>
+    <div class="field"><label for="s-conc">Simultaneous downloads</label><input id="s-conc" type="number" min="1" max="8"></div>
+    <label class="check"><input type="checkbox" id="s-clip"> Watch clipboard for links</label>
+    <div class="field"><label for="s-hosts">Sites to watch for (comma separated)</label><input id="s-hosts"></div>
+    <div class="field">
+      <label for="s-channel">yt-dlp updates (gallery-dl always uses its latest build)</label>
+      <select id="s-channel">
+        <option value="stable">Stable releases</option>
+        <option value="nightly">Nightly builds (site fixes sooner, occasionally buggy)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label data-t="ui.bookmarklet">Browser button</label>
+      <div><a class="bookmarklet" id="s-bookmarklet" href="#" data-t="ui.bookmarklet_link">⚓ Salvage with Whydah</a></div>
+      <div class="example" data-t="ui.bookmarklet_hint">Drag it to your browser's bookmarks bar. Clicking it on any page opens that page here.</div>
+    </div>
+    <div class="error-text" id="s-error"></div>
+    <div class="row-end">
+      <button type="button" id="s-cancel">Cancel</button>
+      <button class="primary" type="submit" id="s-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="history">
+  <h3 data-t="ui.history">History</h3>
+  <input id="history-q" type="search" autocomplete="off" spellcheck="false">
+  <div class="meta" id="history-count" style="margin-top: 8px"></div>
+  <div id="history-list"></div>
+  <div class="row-end">
+    <button type="button" class="link" id="history-clear" data-t="ui.history_clear">Clear history</button>
+    <button type="button" id="history-close" data-t="ui.close">Close</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const token = new URLSearchParams(location.hash.slice(1)).get("t") || "";
+const $ = (id) => document.getElementById(id);
+const state = { settings: null, jobs: new Map(), tools: null, previews: new Map(), expandedGroups: new Set() };
+
+async function api(path, { method = "GET", body } = {}) {
+  const res = await fetch(path, {
+    method,
+    headers: { "X-Token": token, ...(body ? { "Content-Type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || res.statusText), { problem: data.problem });
+  return data;
+}
+
+// ---- language ----
+// Messages come from the app (internal/i18n/locales), in the language set in
+// Settings or else the browser's. t(key, args) fills in {name}; with a count
+// argument it picks the key's plural form by the language's rules. Text in
+// the page itself is moved over to keys gradually: so far, failures and the
+// elements marked data-t.
+const i18n = { lang: "en", auto: "en", languages: [], messages: {} };
+
+async function loadMessages() {
+  Object.assign(i18n, await api(`/api/i18n?lang=${encodeURIComponent(navigator.languages.join(","))}`));
+  document.documentElement.lang = i18n.lang;
+  for (const n of document.querySelectorAll("[data-t]")) n.textContent = t(n.dataset.t);
+}
+
+function t(key, args = {}) {
+  let msg = i18n.messages[key];
+  if (args.count !== undefined) {
+    const form = new Intl.PluralRules(i18n.lang).select(Number(args.count));
+    msg = i18n.messages[`${key}.${form}`] ?? i18n.messages[`${key}.other`] ?? msg;
+  }
+  if (msg === undefined) return key;
+  return msg.replace(/\{(\w+)\}/g, (m, name) => (args[name] ?? m));
+}
+
+// problemText is an explained failure (from the app) as a sentence or two.
+const problemText = (p) => [t(p.key, p.args), p.hint ? t(p.hint, p.args) : ""].filter(Boolean).join(" ");
+
+// problemView shows a failure explained, with what the tool said under
+// "Details" when that says more; plain text for anything else.
+function problemView(problem, fallback) {
+  if (!problem) return el("div", { class: "error-text" }, fallback || "");
+  const text = problemText(problem);
+  return el("div", {}, el("div", { class: "error-text" }, text),
+    problem.detail && problem.detail !== text
+      ? el("details", { class: "error-detail" }, el("summary", {}, t("ui.details")), el("div", {}, problem.detail)) : null);
+}
+
+function el(tag, props = {}, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") { if (v) n.className = v; }
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c != null) n.append(c);
+  return n;
+}
+
+// lightbox shows items[start] ({src, title, detail}) large over the page.
+// Arrow keys or ‹ › step through the rest; Esc, × or a click outside closes it.
+function lightbox(items, start) {
+  if (!items.length) return;
+  let i = Math.max(0, start);
+  const img = el("img", { alt: "", referrerpolicy: "no-referrer" });
+  const cap = el("div", { class: "lb-cap" });
+  const btn = (cls, label, text, onclick) => el("button", { class: `lb-btn ${cls}`, type: "button", "aria-label": label,
+    onclick: (ev) => { ev.stopPropagation(); onclick(); } }, text);
+  const step = (d) => { if (items[i + d]) { i += d; show(); } };
+  const prev = btn("lb-prev", "Previous", "‹", () => step(-1));
+  const next = btn("lb-next", "Next", "›", () => step(1));
+  const closeBtn = btn("lb-close", "Close", "×", () => close());
+  const show = () => {
+    const it = items[i];
+    img.src = it.src; img.alt = it.title || "";
+    cap.replaceChildren(it.title || "", el("span", {}, [it.detail, items.length > 1 && `${i + 1} of ${items.length}`].filter(Boolean).map((t) => `  ·  ${t}`).join("")));
+    prev.disabled = i === 0; next.disabled = i === items.length - 1;
+    prev.hidden = next.hidden = items.length < 2;
+  };
+  const onKey = (ev) => {
+    if (ev.key === "Escape") close();
+    else if (ev.key === "ArrowLeft") step(-1);
+    else if (ev.key === "ArrowRight") step(1);
+    else return;
+    ev.preventDefault();
+  };
+  const back = document.activeElement;
+  const box = el("div", { class: "lightbox", role: "dialog", "aria-modal": "true", "aria-label": "Enlarged image",
+    onclick: (ev) => { if (ev.target === box || ev.target === cap) close(); } }, img, cap, prev, next, closeBtn);
+  function close() { box.remove(); document.removeEventListener("keydown", onKey); if (back) back.focus(); }
+  document.body.append(box);
+  document.addEventListener("keydown", onKey);
+  show();
+  closeBtn.focus();
+}
+
+// enlarge opens the lightbox from a click inside a <label> without ticking its checkbox.
+const enlarge = (items, i) => (ev) => { ev.preventDefault(); ev.stopPropagation(); lightbox(items, i); };
+
+function thumb(src) {
+  const img = el("img", { class: "thumb", alt: "", loading: "lazy", referrerpolicy: "no-referrer" });
+  if (src) img.src = src;
+  img.addEventListener("error", () => img.removeAttribute("src"));
+  return img;
+}
+
+const fmtBytes = (n) => {
+  if (!n) return "";
+  const u = ["B", "KB", "MB", "GB"]; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(i > 1 ? 1 : 0)} ${u[i]}`;
+};
+const fmtEta = (s) => s > 0 ? (s >= 3600 ? `${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m` : s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`) : "";
+
+// ---- tools banner ----
+function renderTools() {
+  const t = state.tools, b = $("tools-banner");
+  if (!t) return;
+  b.replaceChildren(); b.classList.toggle("error", !!t.error);
+  if (t.error) b.append(`Setup failed: ${t.error}`);
+  else if (!t.ready || t.stage) b.append(t.stage || "Getting things ready…"); // also e.g. fetching headless Chrome later
+  if (t.warnings && t.warnings.length) b.append(el("ul", {}, t.warnings.map((w) => el("li", {}, w))));
+  b.hidden = t.ready && !t.stage && !t.error && !(t.warnings && t.warnings.length);
+  renderUpdate();
+}
+
+// ---- tool updates ("refit") ----
+// The server checks for new releases of the tools it manages; installing only happens when asked.
+const dismissKey = "wd.dismissedUpdate";
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode etc. */ } },
+};
+let seenInstalled = "";
+
+function installUpdate() {
+  api("/api/tools/update", { method: "POST" }).catch((e) => alert(e.message));
+}
+
+const pendingText = (u) => (u.pending || []).map((p) => `${p.tool} ${p.current} → ${p.latest}`).join(", ");
+const pendingKey = (u) => (u.pending || []).map((p) => p.tool + "@" + p.latest).join(",");
+const gdlRelease = (v) => (v || "").split(":")[0];
+
+// Failures a newer yt-dlp or gallery-dl won't fix: the site's answer, not how it's read.
+const notToolFaults = new Set(["error.not_found", "error.geo_blocked", "error.private", "error.members_only", "error.drm",
+  "error.unavailable", "error.not_started", "error.network", "error.timeout", "error.disk_full", "error.cookies_blocked",
+  "error.output_folder", "error.rate_limited", "error.linked_none"]);
+
+// updateHint offers a refit on a failure, when there's one to install and it might help.
+function updateHint(problem) {
+  const u = state.tools && state.tools.update;
+  if (!u || !u.available || (problem && notToolFaults.has(problem.key))) return null;
+  return el("div", { class: "hint-update" }, "Newer tools are available and may fix this.",
+    el("button", { type: "button", onclick: installUpdate, title: "Update the helper tools" }, "Refit"));
+}
+
+function renderUpdate() {
+  const t = state.tools, b = $("update-banner"), f = $("footer");
+  const u = t && t.update;
+  f.replaceChildren();
+  if (!t || !t.yt_dlp_version) { b.hidden = true; return; }
+
+  // Footer: versions, channel, and a manual check.
+  f.append(`yt-dlp ${t.yt_dlp_version}`);
+  if (u.supported) f.append(` (${u.channel || state.settings?.update_channel || "stable"})`);
+  if (t.gallery_dl_version) f.append(` · gallery-dl ${gdlRelease(t.gallery_dl_version)}`);
+  if (t.headless_version) f.append(` · headless Chrome ${t.headless_version}`);
+  else if (t.browser) f.append(` · crow's nest: ${t.browser}`);
+  if (u.supported) {
+    f.append(" · ");
+    if (u.state === "checking") f.append("checking for updates…");
+    else if (u.state) f.append("refitting…");
+    else {
+      if (u.check_error) f.append("couldn't check for updates · ");
+      else if (u.checked_at && !u.available && !u.checked_at.startsWith("0001")) f.append("up to date · ");
+      f.append(el("button", { class: "link", type: "button", onclick: () => api("/api/tools/check", { method: "POST" }).then((s) => { state.tools = s; renderTools(); renderJobs(); }).catch((e) => alert(e.message)) }, "Check for updates"));
+    }
+  }
+
+  // Banner: in-progress, failure, success, or available (unless dismissed for these versions).
+  const btn = (label, onclick, cls) => el("button", { type: "button", class: cls, onclick }, label);
+  let content = null;
+  if (u.state === "waiting") content = ["Refitting once the current downloads finish…"];
+  else if (u.state === "installing") content = ["Refitting: updating yt-dlp and gallery-dl…", el("div", { class: "bar indeterminate" }, el("div"))];
+  else if (u.error) content = [`Refit failed: ${u.error}`, el("div", { class: "actions" }, btn("Try again", installUpdate))];
+  else if (u.installed && u.installed !== seenInstalled) {
+    // Offer to retry failures rather than doing it automatically: some (private
+    // videos, region blocks) won't be fixed by an update and would just fail again.
+    const failed = [...state.jobs.values()].filter((j) => j.state === "error");
+    const ack = () => { seenInstalled = u.installed; renderUpdate(); };
+    const retryAll = () => { failed.forEach((j) => post(`/api/jobs/${j.id}/retry`)); ack(); };
+    content = [`Refit complete: ${u.installed}.` + (failed.length ? " Downloads that failed before may work now." : ""),
+      el("div", { class: "actions" },
+        failed.length ? btn(`Retry ${failed.length} failed download${failed.length === 1 ? "" : "s"}`, retryAll, "primary") : null,
+        btn(failed.length ? "Not now" : "OK", ack))];
+  } else if (u.available && store.get(dismissKey) !== pendingKey(u)) {
+    content = [`Newer tools are available (${pendingText(u)}). Sites change often, and a refit fixes downloads that stop working.`,
+      el("div", { class: "actions" },
+        btn("Refit now", installUpdate, "primary"),
+        btn("Not now", () => { store.set(dismissKey, pendingKey(u)); renderUpdate(); }))];
+  }
+  b.replaceChildren(...(content || []));
+  b.hidden = !content;
+}
+
+// ---- previews ----
+// Preview cards are built once per status and cached on the preview (p.el), so
+// ticking checkboxes or a new preview arriving doesn't reset a list's scroll.
+// mode is "" (anything), "photos" (skip the video lookup) or "crow" (the
+// crow's nest: load the page in a hidden browser). Previews are keyed by
+// URL, or mode + ":" + URL.
+async function inspect(url, mode = "") {
+  url = url.trim();
+  const key = mode ? `${mode}:${url}` : url;
+  if (!url || state.previews.has(key)) return;
+  const photos = mode !== "";
+  state.previews.set(key, { status: "loading", url, mode, photos });
+  renderPreviews();
+  try {
+    const md = await api("/api/inspect", { method: "POST", body: { url, photos: mode === "photos", crows_nest: mode === "crow" } });
+    if (state.previews.has(key)) {
+      const selected = new Set((md.photos || md.entries || []).map((e) => e.index));
+      state.previews.set(key, { status: "ready", url, mode, photos, md, selected, expanded: false });
+    }
+  } catch (e) {
+    if (state.previews.has(key)) state.previews.set(key, { status: "error", url, mode, photos, error: e.message, problem: e.problem });
+  }
+  renderPreviews();
+}
+
+// checkLinks runs yt-dlp on the pages a result's thumbnails link to; the
+// ones with a video come back as a playlist. Progress arrives as links_progress events.
+async function checkLinks(url, md) {
+  const key = `links:${url}`;
+  if (state.previews.has(key)) return;
+  const links = md.links;
+  state.previews.set(key, { status: "loading", url, mode: "links", links, title: md.title, done: 0 });
+  renderPreviews();
+  try {
+    const pl = await api("/api/check-links", { method: "POST", body: { url, title: md.title, links } });
+    if (state.previews.has(key)) {
+      state.previews.set(key, { status: "ready", url, mode: "links", links, title: md.title, md: pl, selected: new Set(pl.entries.map((e) => e.index)), expanded: true });
+    }
+  } catch (e) {
+    if (state.previews.has(key)) state.previews.set(key, { status: "error", url, mode: "links", links, title: md.title, photos: true, error: e.message, problem: e.problem });
+  }
+  renderPreviews();
+}
+
+function linksProgress(d) {
+  const p = state.previews.get(`links:${d.url}`);
+  if (!p || p.status !== "loading") return;
+  p.done = d.done;
+  if (p.bar) p.bar.style.width = `${(100 * d.done / Math.max(d.total, 1)).toFixed(0)}%`;
+  if (p.count) p.count.textContent = `${d.done} of ${d.total} checked`;
+}
+
+const linkedBtn = (url, md, cls) => el("button", { class: cls, type: "button", onclick: () => checkLinks(url, md),
+  title: "Check the pages these thumbnails lead to, and list the videos on them" }, `${plural(md.links.length, "linked video")}…`);
+
+const crowsNestTip = "Load the page in a hidden browser and scroll through it, to find photos its scripts add and catch the streams its player plays. Takes 5–30 seconds.";
+const crowsNestBtn = (url, cls) => el("button", { class: cls, type: "button", onclick: () => inspect(url, "crow"), title: crowsNestTip }, "Crow's nest");
+
+function dismiss(key) { state.previews.delete(key); renderPreviews(); }
+
+const audioLabel = () => (state.settings ? state.settings.audio_format : "mp3");
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+async function startDownload(key, audio) {
+  const p = state.previews.get(key), md = p.md;
+  dismiss(key);
+  try {
+    upsertJob(await api("/api/download", { method: "POST", body: { url: p.url, audio, title: md.title, thumbnail: md.thumbnail } }));
+  } catch (e) { alert(e.message); }
+}
+
+// A stream the crow's nest caught downloads with the Referer its player sent.
+async function startStream(key, st, audio) {
+  const page = state.previews.get(key).url;
+  dismiss(key);
+  try {
+    upsertJob(await api("/api/download", { method: "POST", body: {
+      url: st.url, audio, title: st.title, thumbnail: st.thumbnail, referer: st.referer, origin: st.origin, page } }));
+  } catch (e) { alert(e.message); }
+}
+
+const streamKinds = { hls: "HLS stream", dash: "DASH stream", video: "Video file", audio: "Audio file" };
+const streamMeta = (st) => [streamKinds[st.kind], st.live ? "live" : st.duration ? st.duration_string : "",
+  st.height ? `${st.height}p` : "", st.filesize ? `~${fmtBytes(st.filesize)}` : ""].filter(Boolean).join(" · ");
+
+// streamsBtn opens a result's streams as a card of their own, next to its photos or linked videos.
+const streamsBtn = (url, md, cls) => el("button", { class: cls, type: "button",
+  onclick: () => {
+    const key = `streams:${url}`;
+    if (state.previews.has(key)) return;
+    state.previews.set(key, { status: "ready", url, mode: "streams", md: { ...md, kind: "streams" } });
+    renderPreviews();
+  }, title: "Video or audio the page's player loaded" }, `▶ ${plural(md.streams.length, "stream")}…`);
+
+// photosBtn opens a streams result's photos (its poster, say) as a photo card.
+const photosBtn = (url, md) => el("button", { class: "link", type: "button",
+  onclick: () => {
+    const key = `photos-of:${url}`;
+    if (state.previews.has(key)) return;
+    state.previews.set(key, { status: "ready", url, mode: "photos", photos: true, md: { ...md, kind: "photos" },
+      selected: new Set(md.photos.map((ph) => ph.index)), expanded: true });
+    renderPreviews();
+  } }, `${plural(md.photos.length, "photo")}…`);
+
+function streamsCard(key, p) {
+  const md = p.md, streams = md.streams, first = streams[0];
+  const isAudio = (st) => st.kind === "audio";
+  const buttons = (st, cls) => [
+    isAudio(st) ? null : el("button", { class: cls, type: "button", onclick: () => startStream(key, st, false) }, "Salvage video"),
+    el("button", { class: isAudio(st) ? cls : "", type: "button", onclick: () => startStream(key, st, true) }, `Salvage audio (${audioLabel()})`)];
+  const dismissBtn = el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss");
+  const more = [md.photos && md.photos.length ? photosBtn(p.url, md) : null,
+    md.links && md.links.length ? linkedBtn(p.url, md, "link") : null];
+  if (streams.length === 1) {
+    return el("div", { class: "card preview" }, thumb(first.thumbnail || md.thumbnail),
+      el("div", {},
+        el("div", { class: "title" }, first.title || md.title || p.url),
+        el("div", { class: "meta" }, streamMeta(first), " · caught by the crow's nest"),
+        el("div", { class: "actions" }, ...buttons(first, "primary"), ...more, dismissBtn)));
+  }
+  const list = el("div", { class: "items" }, streams.map((st, i) =>
+    el("div", { class: "item no-check" },
+      el("span", { class: "num" }, i + 1),
+      el("span", { class: "name", title: st.url }, streamMeta(st)),
+      el("span", { class: "status", title: st.referer ? `played on ${st.referer}` : "" }, new URL(st.url).hostname),
+      el("span", {}, ...buttons(st, "")))));
+  return el("div", { class: "card preview" }, thumb(first.thumbnail || md.thumbnail),
+    el("div", {},
+      el("div", { class: "title" }, md.title || p.url),
+      el("div", { class: "meta" }, `${plural(streams.length, "stream")} caught by the crow's nest. The first is usually the main one.`),
+      el("div", { class: "actions" }, ...buttons(first, "primary"), ...more, dismissBtn)),
+    list);
+}
+
+async function startPlaylist(key, audio) {
+  const p = state.previews.get(key), md = p.md;
+  const items = md.entries.filter((e) => p.selected.has(e.index))
+    .map((e) => ({ index: e.index, url: e.url, title: e.title, thumbnail: e.thumbnail }));
+  if (!items.length) return;
+  dismiss(key);
+  try {
+    const jobs = await api("/api/download-playlist", { method: "POST", body: { title: md.title, total: md.entries.length, audio, items } });
+    for (const j of jobs) state.jobs.set(j.id, j);
+    renderJobs();
+  } catch (e) { alert(e.message); }
+}
+
+async function startPhotos(key) {
+  const p = state.previews.get(key), md = p.md;
+  const items = md.photos.filter((ph) => p.selected.has(ph.index));
+  if (!items.length) return;
+  dismiss(key);
+  try {
+    upsertJob(await api("/api/download-photos", { method: "POST", body: {
+      url: p.url, title: md.title, source: md.source, total: md.photos.length, truncated: md.truncated, items } }));
+  } catch (e) { alert(e.message); }
+}
+
+function previewCard(key, p) {
+  const url = p.url;
+  if (p.status === "loading" && p.mode === "links") {
+    p.bar = el("div", { style: "width: 0%" });
+    p.count = el("span", {}, `0 of ${p.links.length} checked`);
+    return el("div", { class: "card preview" }, thumb(),
+      el("div", {}, el("div", { class: "title" }, `Checking ${plural(p.links.length, "linked page")} for videos…`),
+        el("div", { class: "meta" }, p.title || url, " · ", p.count),
+        el("div", { class: "bar" }, p.bar),
+        el("div", { class: "actions" }, el("button", { type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
+  }
+  if (p.status === "loading") {
+    return el("div", { class: "card preview" }, thumb(),
+      el("div", {}, el("div", { class: "title" }, p.mode === "crow" ? "Up in the crow's nest…" : p.photos ? "Looking for photos…" : "Looking through the spyglass…"),
+        el("div", { class: "meta" }, p.mode === "crow" ? `Loading ${url} in a hidden browser` : url),
+        el("div", { class: "bar indeterminate" }, el("div")),
+        el("div", { class: "actions" }, el("button", { type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
+  }
+  if (p.status === "error") {
+    return el("div", { class: "card" },
+      el("div", { class: "meta" }, url), problemView(p.problem, p.error), updateHint(p.problem),
+      el("div", { class: "actions" },
+        el("button", { type: "button", onclick: () => { dismiss(key); p.mode === "links" ? checkLinks(url, { links: p.links, title: p.title }) : inspect(url, p.mode); } }, t("ui.retry")),
+        p.photos ? null : el("button", { type: "button", onclick: () => { dismiss(key); inspect(url, "photos"); }, title: "Look for photos on this page instead" }, "Photos on this page…"),
+        p.mode === "crow" ? null : crowsNestBtn(url),
+        el("button", { type: "button", onclick: () => dismiss(key) }, "Dismiss")));
+  }
+  const md = p.md;
+  if (md.kind === "playlist") return playlistCard(key, p);
+  if (md.kind === "photos") return photosCard(key, p);
+  if (md.kind === "streams") return streamsCard(key, p);
+  if (md.kind === "links") {
+    const shown = md.links.slice(0, 4).map((l) => l.title).filter(Boolean).join(" · ");
+    return el("div", { class: "card preview" }, thumb(md.links[0] && md.links[0].thumb),
+      el("div", {},
+        el("div", { class: "title" }, md.title || url),
+        el("div", { class: "meta" }, `Thumbnails linking to ${plural(md.links.length, "possible video")}`, shown ? ": " + shown : ""),
+        el("div", { class: "actions" },
+          el("button", { class: "primary", type: "button", onclick: () => { dismiss(key); checkLinks(url, md); } }, `Check ${plural(md.links.length, "linked page")}`),
+          md.streams && md.streams.length ? streamsBtn(url, md, "link") : null,
+          md.source === "browser" ? null : crowsNestBtn(url, "link"),
+          el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
+  }
+  const meta = [md.uploader, md.duration_string !== "Unknown" && md.duration_string, md.filesize_approx && `~${fmtBytes(md.filesize_approx)}`].filter(Boolean).join(" · ");
+  return el("div", { class: "card preview" }, thumb(md.thumbnail),
+    el("div", {},
+      el("div", { class: "title" }, md.title || url),
+      el("div", { class: "meta" }, meta),
+      el("div", { class: "actions" },
+        el("button", { class: "primary", type: "button", onclick: () => startDownload(key, false) }, "Salvage video"),
+        el("button", { type: "button", onclick: () => startDownload(key, true) }, `Salvage audio (${audioLabel()})`),
+        md.playlist_url ? el("button", { type: "button", onclick: () => inspect(md.playlist_url) }, "Whole playlist…") : null,
+        el("button", { class: "link", type: "button", onclick: () => inspect(url, "photos"), title: "Look for photos on this page instead" }, "Photos on this page…"),
+        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
+}
+
+function playlistCard(key, p) {
+  const md = p.md, n = md.entries.length;
+  const videoBtn = el("button", { class: "primary", type: "button", onclick: () => startPlaylist(key, false) });
+  const audioBtn = el("button", { type: "button", onclick: () => startPlaylist(key, true) });
+  const chooseBtn = el("button", { class: "link", type: "button" });
+  const checks = [];
+  const refresh = () => {
+    const k = p.selected.size, what = k === n ? `all ${n}` : `${k} of ${n}`;
+    videoBtn.textContent = `Salvage ${what}`;
+    audioBtn.textContent = `Salvage audio (${audioLabel()})`;
+    videoBtn.disabled = audioBtn.disabled = k === 0;
+    chooseBtn.textContent = p.expanded ? "Hide items" : "Choose items…";
+    list.hidden = !p.expanded;
+  };
+  const setAll = (on) => {
+    p.selected = new Set(on ? md.entries.map((e) => e.index) : []);
+    checks.forEach((c) => { c.checked = on; });
+    refresh();
+  };
+  // Thumbnails, when the playlist has them, open large on click.
+  const withThumbs = md.entries.filter((e) => e.thumbnail);
+  const big = withThumbs.map((e) => ({ src: e.thumbnail, title: e.title, detail: e.duration ? e.duration_string : "" }));
+  const rowThumb = (e) => {
+    if (!e.thumbnail) return el("span", { class: "row-thumb" });
+    const img = el("img", { class: "row-thumb", alt: "", loading: "lazy", referrerpolicy: "no-referrer", src: e.thumbnail,
+      title: "Enlarge", onclick: enlarge(big, withThumbs.indexOf(e)) });
+    img.addEventListener("error", () => img.replaceWith(el("span", { class: "row-thumb" })));
+    return img;
+  };
+  const list = el("div", { class: "items" },
+    el("div", { class: "items-head" }, "Select",
+      el("button", { class: "link", type: "button", onclick: () => setAll(true) }, "all"),
+      el("button", { class: "link", type: "button", onclick: () => setAll(false) }, "none")),
+    md.entries.map((e) => {
+      const cb = el("input", { type: "checkbox", checked: p.selected.has(e.index), "aria-label": e.title });
+      cb.addEventListener("change", () => { cb.checked ? p.selected.add(e.index) : p.selected.delete(e.index); refresh(); });
+      checks.push(cb);
+      return el("label", { class: withThumbs.length ? "item with-thumb" : "item" }, cb,
+        el("span", { class: "num" }, e.index),
+        withThumbs.length ? rowThumb(e) : null,
+        el("span", { class: "name", title: e.title }, e.title),
+        el("span", { class: "status" }, e.duration ? e.duration_string : ""));
+    }));
+  chooseBtn.addEventListener("click", () => { p.expanded = !p.expanded; refresh(); });
+  refresh();
+  const meta = [md.uploader, plural(n, "item")].filter(Boolean).join(" · ");
+  return el("div", { class: "card preview" }, thumb(md.thumbnail),
+    el("div", {},
+      el("div", { class: "title" }, md.title || p.url),
+      el("div", { class: "meta" }, md.source === "links" ? "Videos linked from this page · " : "Playlist · ", meta),
+      el("div", { class: "actions" }, videoBtn, audioBtn, chooseBtn,
+        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss"))),
+    list);
+}
+
+// The photo picker is a grid of tiles; images load lazily as it scrolls.
+function photosCard(key, p) {
+  const md = p.md, n = md.photos.length;
+  const saveBtn = el("button", { class: "primary", type: "button", onclick: () => startPhotos(key) });
+  const chooseBtn = el("button", { class: "link", type: "button" });
+  const tiles = [];
+  const refresh = () => {
+    const k = p.selected.size;
+    saveBtn.textContent = k === n ? `Salvage all ${md.truncated ? n + "+" : n}` : `Salvage ${k} of ${n}`;
+    saveBtn.disabled = k === 0;
+    chooseBtn.textContent = p.expanded ? "Hide photos" : "Choose photos…";
+    picker.hidden = !p.expanded;
+  };
+  const setOne = (ph, tile, on) => {
+    on ? p.selected.add(ph.index) : p.selected.delete(ph.index);
+    tile.classList.toggle("on", on);
+    tile.querySelector("input").checked = on;
+  };
+  const setAll = (on) => { md.photos.forEach((ph, i) => setOne(ph, tiles[i], on)); refresh(); };
+  const stills = md.photos.filter((ph) => !ph.video);
+  const big = stills.map((ph) => ({ src: ph.url, title: ph.name || `Photo ${ph.index}`, detail: ph.width ? `${ph.width}×${ph.height}` : "" }));
+  const grid = el("div", { class: "photo-grid" }, md.photos.map((ph) => {
+    const cb = el("input", { type: "checkbox", checked: p.selected.has(ph.index), "aria-label": ph.name || `Photo ${ph.index}` });
+    const caption = [ph.index, ph.width ? `${ph.width}×${ph.height}` : ""].filter(Boolean).join(" · ");
+    const tile = el("label", { class: "tile" + (p.selected.has(ph.index) ? " on" : ""), title: ph.name || ph.url },
+      ph.video ? el("span", { class: "video" }, "▶ video") : thumb(ph.thumb || ph.url), cb,
+      ph.video ? null : el("button", { class: "zoom", type: "button", "aria-label": "Enlarge", title: "Enlarge", onclick: enlarge(big, stills.indexOf(ph)) }, "⤢"),
+      el("span", { class: "cap" }, caption));
+    cb.addEventListener("change", () => { setOne(ph, tile, cb.checked); refresh(); });
+    tiles.push(tile);
+    return tile;
+  }));
+  const picker = el("div", { class: "photos" },
+    el("div", { class: "items-head" }, "Select",
+      el("button", { class: "link", type: "button", onclick: () => setAll(true) }, "all"),
+      el("button", { class: "link", type: "button", onclick: () => setAll(false) }, "none")),
+    grid);
+  chooseBtn.addEventListener("click", () => { p.expanded = !p.expanded; refresh(); });
+  refresh();
+  const found = md.truncated ? `more than ${n} photos` : plural(n, "photo");
+  const via = { page: "found on the page", browser: "from the crow's nest", "gallery-dl": "via gallery-dl" }[md.source];
+  const meta = [md.uploader, found, via].filter(Boolean).join(" · ");
+  return el("div", { class: "card preview" }, thumb(md.thumbnail),
+    el("div", {},
+      el("div", { class: "title" }, md.title || p.url),
+      el("div", { class: "meta" }, "Photos · ", meta),
+      md.truncated ? el("div", { class: "meta" }, `Showing the first ${n}. Salvage all gets every one.`) : null,
+      el("div", { class: "actions" }, saveBtn, chooseBtn,
+        md.streams && md.streams.length ? streamsBtn(p.url, md, "link") : null,
+        md.links && md.links.length ? linkedBtn(p.url, md, "link") : null,
+        md.source === "browser" ? null : crowsNestBtn(p.url, "link"),
+        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss"))),
+    picker);
+}
+
+function renderPreviews() {
+  $("previews").replaceChildren(...[...state.previews].reverse().map(([key, p]) => {
+    if (!p.el || p.elStatus !== p.status) { p.el = previewCard(key, p); p.elStatus = p.status; }
+    return p.el;
+  }));
+}
+
+// ---- jobs ----
+// Progress events arrive several times a second per job; coalesce re-renders.
+let renderQueued = false;
+function upsertJob(job) {
+  state.jobs.set(job.id, job);
+  if (!renderQueued) { renderQueued = true; setTimeout(() => { renderQueued = false; renderJobs(); }, 150); }
+}
+
+const post = (path) => api(path, { method: "POST" }).catch((e) => alert(e.message));
+const isActive = (j) => !["done", "error", "canceled"].includes(j.state);
+const fileName = (p) => p.split(/[\\/]/).pop();
+
+function photoLine(j) {
+  const count = j.file_total ? `${j.files || 0} of ${plural(j.file_total, "photo")}` : plural(j.files || 0, "photo");
+  switch (j.state) {
+    case "queued": return "Waiting for a free slot…";
+    case "downloading": return [count, j.downloaded && fmtBytes(j.downloaded)].filter(Boolean).join(" · ");
+    case "done": return `${plural(j.files || 0, "photo")} saved`;
+    default: return j.files ? `${count} saved` : "";
+  }
+}
+
+function jobLine(j) {
+  if (j.kind === "photos") return photoLine(j);
+  switch (j.state) {
+    case "queued": return "Waiting for a free slot…";
+    case "processing": return j.audio ? "Converting audio…" : "Processing…";
+    case "downloading": {
+      const parts = [j.total ? `${fmtBytes(j.downloaded)} of ${fmtBytes(j.total)}` : fmtBytes(j.downloaded)];
+      if (j.speed) parts.push(`${fmtBytes(j.speed)}/s`);
+      if (j.eta) parts.push(`${fmtEta(j.eta)} left`);
+      if (j.part > 1) parts.push(`part ${j.part}`);
+      return parts.filter(Boolean).join(" · ");
+    }
+    case "done": return j.file_path ? fileName(j.file_path) : "Done";
+    default: return ""; // canceled/error: the badge says it
+  }
+}
+
+function progressBar(state, percent) {
+  const bar = el("div", { class: "bar" + (state === "queued" || state === "processing" ? " indeterminate" : "") + (state === "done" ? " done" : "") }, el("div"));
+  if (state === "downloading" || state === "done") bar.firstChild.style.width = `${Math.min(100, state === "done" ? 100 : percent)}%`;
+  return bar;
+}
+
+function jobActions(j, small) {
+  const b = (label, onclick) => el("button", { type: "button", onclick }, label);
+  return [
+    isActive(j) ? b("Cancel", () => post(`/api/jobs/${j.id}/cancel`)) : null,
+    (j.state === "done" || (j.kind === "photos" && j.files)) && j.file_path ? b("Show", () => post(`/api/jobs/${j.id}/reveal`)) : null,
+    (j.state === "error" || j.state === "canceled") ? b("Retry", () => post(`/api/jobs/${j.id}/retry`)) : null,
+  ].filter(Boolean).slice(0, small ? 1 : 3);
+}
+
+function jobCard(j) {
+  // A photo job with an unknown total (a huge gallery) shows a moving bar and a count.
+  const unknownTotal = j.kind === "photos" && !j.file_total;
+  const badgeText = { queued: "Queued", downloading: unknownTotal ? "Salvaging" : `${Math.floor(j.percent)}%`, processing: "Processing", done: "Done", error: "Failed", canceled: "Canceled" }[j.state];
+  const tag = j.audio ? "  · audio" : j.kind === "photos" ? "  · photos" : "";
+  return el("div", { class: "card job" }, thumb(j.thumbnail),
+    el("div", { style: "min-width:0" },
+      el("div", { class: "title" }, j.title, tag ? el("span", { class: "meta" }, tag) : null),
+      (isActive(j) || j.state === "done") ? progressBar(unknownTotal && j.state === "downloading" ? "processing" : j.state, j.percent) : null,
+      el("div", { class: "meta" }, el("span", { class: `badge ${j.state}` }, badgeText), "  ", jobLine(j)),
+      j.state === "error" ? problemView(j.problem, j.error) : null,
+      j.state === "error" ? updateHint(j.problem) : null),
+    el("div", { class: "job-actions actions" }, jobActions(j)));
+}
+
+function itemStatus(j) {
+  switch (j.state) {
+    case "downloading": return `${Math.floor(j.percent)}%`;
+    case "processing": return "processing";
+    case "done": return "done";
+    case "error": return "failed";
+    default: return j.state;
+  }
+}
+
+function groupCard(id, jobs) {
+  jobs.sort((a, b) => a.index - b.index);
+  const first = jobs[0], n = jobs.length;
+  const count = (s) => jobs.filter((j) => j.state === s).length;
+  const done = count("done"), failed = count("error"), canceled = count("canceled");
+  const active = jobs.filter(isActive);
+  const running = jobs.filter((j) => j.state === "downloading" || j.state === "processing").length;
+  // Unfinished items count as at most 99% so the group never reads 100% early.
+  const percent = jobs.reduce((sum, j) => sum + (j.state === "done" ? 100 : isActive(j) ? Math.min(j.percent, 99) : 0), 0) / n;
+  const overall = active.length ? (running ? "downloading" : "queued") : "done";
+
+  const summary = [
+    `${done} of ${n} done`,
+    running && `${running} downloading`,
+    failed && `${failed} failed`,
+    canceled && `${canceled} canceled`,
+  ].filter(Boolean).join(" · ");
+  const expanded = state.expandedGroups.has(id);
+  const toggle = () => { expanded ? state.expandedGroups.delete(id) : state.expandedGroups.add(id); renderJobs(); };
+  const firstDone = jobs.find((j) => j.state === "done" && j.file_path);
+  const b = (label, onclick, cls) => el("button", { type: "button", class: cls, onclick }, label);
+
+  return el("div", { class: "card job" }, thumb((jobs.find((j) => j.thumbnail) || first).thumbnail),
+    el("div", { style: "min-width:0" },
+      el("div", { class: "title" }, first.group_title, el("span", { class: "meta" }, `  · ${plural(n, "item")}${first.audio ? " · audio" : ""}`)),
+      // Finished with errors: show how much actually completed.
+      overall === "done" && (failed || canceled) ? progressBar("downloading", (done / n) * 100) : progressBar(overall, percent),
+      el("div", { class: "meta" },
+        el("span", { class: `badge ${active.length ? "" : failed ? "error" : "done"}` }, active.length ? `${Math.floor(percent)}%` : failed ? "Finished with errors" : "Done"),
+        "  ", summary),
+      failed && !active.length ? updateHint() : null),
+    el("div", { class: "job-actions actions" },
+      active.length ? b("Cancel all", () => post(`/api/groups/${id}/cancel`)) : null,
+      (failed || canceled) ? b("Retry failed", () => jobs.filter((j) => j.state === "error" || j.state === "canceled").forEach((j) => post(`/api/jobs/${j.id}/retry`))) : null,
+      firstDone ? b("Show", () => post(`/api/jobs/${firstDone.id}/reveal`)) : null,
+      b(expanded ? "Hide items" : "Items", toggle, "link")),
+    expanded ? el("div", { class: "items", "data-group": id }, jobs.map((j) =>
+      el("div", { class: "item no-check", title: j.state === "error" ? (j.problem ? problemText(j.problem) : j.error) : j.title },
+        el("span", { class: "num" }, j.index),
+        el("span", { class: "name" }, j.title),
+        el("span", { class: `status ${j.state}` }, itemStatus(j)),
+        el("span", {}, jobActions(j, true))))) : null);
+}
+
+function renderJobs() {
+  const box = $("jobs");
+  if (!state.jobs.size) { box.replaceChildren(el("div", { class: "empty" }, "Nothing yet.")); renderUpdate(); return; }
+  // Single jobs and playlist groups, newest first; a group sorts by its first item.
+  const groups = new Map(), cards = [];
+  for (const j of state.jobs.values()) {
+    if (!j.group) { cards.push({ created: j.created, render: () => jobCard(j) }); continue; }
+    if (!groups.has(j.group)) groups.set(j.group, []);
+    groups.get(j.group).push(j);
+  }
+  for (const [id, jobs] of groups) {
+    const created = jobs.reduce((min, j) => (j.created < min ? j.created : min), jobs[0].created);
+    cards.push({ created, render: () => groupCard(id, jobs) });
+  }
+  cards.sort((a, b) => b.created.localeCompare(a.created));
+  const scroll = new Map([...box.querySelectorAll(".items")].map((n) => [n.dataset.group, n.scrollTop]));
+  box.replaceChildren(...cards.map((c) => c.render()));
+  renderUpdate(); // the post-update banner counts failed downloads
+  for (const n of box.querySelectorAll(".items")) if (scroll.has(n.dataset.group)) n.scrollTop = scroll.get(n.dataset.group);
+}
+
+// ---- settings ----
+function fillSelect(sel, options, value, labels = {}) {
+  sel.replaceChildren(...options.map((o) => el("option", { value: o, selected: o === value }, labels[o] || o)));
+}
+
+let meta = {};
+function openSettings() {
+  const s = state.settings;
+  $("s-out").value = s.output_dir;
+  fillSelect($("s-quality"), meta.video_qualities, s.video_quality, { best: "Best available", 2160: "4K (2160p)", 1440: "1440p", 1080: "1080p", 720: "720p", 480: "480p" });
+  $("s-compat").checked = s.compatible_mp4;
+  fillSelect($("s-audio"), meta.audio_formats, s.audio_format);
+  const detected = new Set(meta.browsers);
+  const browsers = ["", ...meta.supported_browsers.filter((b) => detected.has(b)), ...meta.supported_browsers.filter((b) => !detected.has(b))];
+  const labels = { "": "Don't use cookies" };
+  for (const b of meta.supported_browsers) labels[b] = b[0].toUpperCase() + b.slice(1) + (detected.has(b) ? "" : " (not detected)");
+  fillSelect($("s-browser"), browsers, s.browser_cookies, labels);
+  $("s-conc").value = s.max_concurrent;
+  $("s-clip").checked = s.watch_clipboard;
+  $("s-hosts").value = s.supported_hosts.join(", ");
+  $("s-channel").value = s.update_channel;
+  const autoName = (i18n.languages.find((l) => l.code === i18n.auto) || {}).name || i18n.auto;
+  const langLabels = { "": t("ui.language_auto", { name: autoName }) };
+  for (const l of i18n.languages) langLabels[l.code] = l.name;
+  fillSelect($("s-lang"), ["", ...i18n.languages.map((l) => l.code)], s.language, langLabels);
+  $("s-names").value = s.name_template;
+  $("s-names").placeholder = "{title}";
+  showNameExample();
+  $("s-bookmarklet").href = bookmarklet();
+  $("s-error").textContent = "";
+  $("settings").showModal();
+}
+
+async function saveSettings(ev) {
+  ev.preventDefault();
+  const body = {
+    output_dir: $("s-out").value,
+    video_quality: $("s-quality").value,
+    compatible_mp4: $("s-compat").checked,
+    audio_format: $("s-audio").value,
+    browser_cookies: $("s-browser").value,
+    max_concurrent: parseInt($("s-conc").value, 10) || 1,
+    watch_clipboard: $("s-clip").checked,
+    supported_hosts: $("s-hosts").value.split(",").map((h) => h.trim()).filter(Boolean),
+    update_channel: $("s-channel").value,
+    language: $("s-lang").value,
+    name_template: $("s-names").value.trim(),
+  };
+  try {
+    const langChanged = body.language !== state.settings.language;
+    state.settings = await api("/api/settings", { method: "PUT", body });
+    if (langChanged) { await loadMessages(); renderJobs(); }
+    for (const p of state.previews.values()) p.el = null; // labels show the audio format
+    renderClipHint(); renderPreviews();
+    $("settings").close();
+  } catch (e) { $("s-error").textContent = e.problem ? problemText(e.problem) : e.message; }
+}
+
+// showNameExample shows what the file name template makes of an example video.
+const nameSample = { title: "Harbour Lights", uploader: "Sea Films", date: "2026-10-25", site: "vimeo.com", id: "48213" };
+function showNameExample() {
+  const tmpl = $("s-names").value.trim() || "{title}";
+  const name = tmpl.replace(/\{(\w+)\}/g, (m, k) => nameSample[k] ?? m) + ".mp4";
+  $("s-names-example").replaceChildren(t("ui.names_example", { tokens: (meta.name_tokens || []).map((k) => `{${k}}`).join(" ") }) + " ", el("code", {}, name));
+}
+
+// bookmarklet is a link that, run on any page, opens it in Whydah: this
+// tab if it's open (by window name), else a new one. The key goes after
+// "#", which browsers never send anywhere, so other sites can't use it.
+function bookmarklet() {
+  const base = `${location.origin}/#t=${encodeURIComponent(token)}&url=`;
+  return `javascript:void window.open(${JSON.stringify(base)}+encodeURIComponent(location.href),"whydah")`;
+}
+
+// takeLinkFromAddress inspects a link the bookmarklet passed in the address, then tidies the address.
+function takeLinkFromAddress() {
+  const u = new URLSearchParams(location.hash.slice(1)).get("url");
+  if (!u) return;
+  history.replaceState(null, "", `#t=${encodeURIComponent(token)}`);
+  inspect(u);
+}
+
+// ---- history ----
+let historyTimer;
+async function showHistory() {
+  const q = $("history-q").value;
+  const { entries, total } = await api(`/api/history?q=${encodeURIComponent(q)}`);
+  $("history-count").textContent = total ? t("ui.history_count", { count: total, shown: entries.length }) : (q ? t("ui.history_none_match") : t("ui.history_empty"));
+  $("history-list").replaceChildren(...entries.map((e) => {
+    const when = new Date(e.finished).toLocaleString(i18n.lang, { dateStyle: "medium", timeStyle: "short" });
+    const what = e.kind === "photos" ? t("ui.kind_photos", { count: e.files || 0 }) : e.audio ? t("ui.kind_audio") : t("ui.kind_video");
+    const site = (() => { try { return new URL(e.page || e.url).hostname.replace(/^www\./, ""); } catch { return ""; } })();
+    const again = e.page || e.url;
+    return el("div", { class: "past" },
+      e.kind === "photos" && !e.thumbnail ? el("div", { class: "thumb" }) : thumb(e.thumbnail),
+      el("div", {},
+        el("div", { class: "name", title: e.title }, e.title),
+        el("div", { class: "meta" }, [what, site, e.group, when].filter(Boolean).join(" · "))),
+      el("div", { class: "actions" },
+        e.exists ? el("button", { type: "button", onclick: () => api(`/api/history/${e.id}/reveal`, { method: "POST" }).catch((x) => alert(x.message)) }, t("ui.show")) : null,
+        el("button", { type: "button", title: again, onclick: () => { $("history").close(); inspect(again); } }, t("ui.salvage_again")),
+        el("button", { type: "button", class: "link", title: t("ui.history_forget"), "aria-label": t("ui.history_forget"),
+          onclick: () => api(`/api/history/${e.id}/forget`, { method: "POST" }).then(showHistory) }, "✕")));
+  }));
+}
+
+function renderClipHint() {
+  $("clip-hint").textContent = state.settings && state.settings.watch_clipboard
+    ? "Watching your clipboard: copy a link from a watched site and it will appear here."
+    : "Clipboard watching is off. Turn it on in Settings.";
+}
+
+// ---- wiring ----
+async function loadState() {
+  const s = await api("/api/state");
+  meta = s; state.settings = s.settings; state.tools = s.tools;
+  state.jobs = new Map(s.jobs.map((j) => [j.id, j]));
+  renderTools(); renderJobs(); renderClipHint();
+}
+
+function connect() {
+  const es = new EventSource(`/api/events?t=${encodeURIComponent(token)}`);
+  es.onopen = () => loadState().catch(() => {}); // resync anything missed while disconnected
+  es.onmessage = (m) => {
+    const ev = JSON.parse(m.data);
+    if (ev.type === "job_updated") upsertJob(ev.data);
+    else if (ev.type === "tools_status") {
+      const was = state.tools && state.tools.update && state.tools.update.available;
+      state.tools = ev.data; renderTools();
+      if (was !== state.tools.update.available) { // failure cards show an update hint
+        for (const p of state.previews.values()) if (p.status === "error") p.el = null;
+        renderPreviews(); renderJobs();
+      }
+    }
+    else if (ev.type === "url_detected") inspect(ev.data.url);
+    else if (ev.type === "links_progress") linksProgress(ev.data);
+  };
+}
+
+$("url-form").addEventListener("submit", (ev) => { ev.preventDefault(); inspect($("url-input").value); $("url-input").value = ""; });
+$("open-settings").addEventListener("click", () => state.settings && openSettings());
+$("s-names").addEventListener("input", showNameExample);
+$("s-bookmarklet").addEventListener("click", (ev) => { ev.preventDefault(); alert(t("ui.bookmarklet_hint")); });
+$("open-history").addEventListener("click", () => {
+  $("history-q").placeholder = t("ui.history_search");
+  $("history").showModal();
+  showHistory().catch((e) => { $("history-count").textContent = e.message; });
+});
+$("history-q").addEventListener("input", () => { clearTimeout(historyTimer); historyTimer = setTimeout(() => showHistory().catch(() => {}), 150); });
+$("history-close").addEventListener("click", () => $("history").close());
+$("history-clear").addEventListener("click", async () => {
+  if (!confirm(t("ui.history_clear_confirm"))) return;
+  await api("/api/history/forget", { method: "POST" });
+  showHistory();
+});
+window.addEventListener("hashchange", takeLinkFromAddress);
+$("settings-form").addEventListener("submit", saveSettings);
+$("s-cancel").addEventListener("click", () => $("settings").close());
+$("open-folder").addEventListener("click", () => api("/api/open-folder", { method: "POST" }).catch((e) => alert(e.message)));
+$("clear").addEventListener("click", async () => {
+  const jobs = await api("/api/jobs/clear", { method: "POST" });
+  state.jobs = new Map(jobs.map((j) => [j.id, j])); renderJobs();
+});
+$("quit").addEventListener("click", async () => {
+  if (!confirm("Quit Whydah? Running downloads will stop.")) return;
+  await api("/api/quit", { method: "POST" }).catch(() => {});
+  document.body.replaceChildren(el("main", {}, el("p", { class: "hint" }, "Whydah has made port and shut down. You can close this tab.")));
+});
+
+if (!token) {
+  $("tools-banner").hidden = false; $("tools-banner").classList.add("error");
+  $("tools-banner").textContent = "This page needs to be opened from the app. Run Whydah again to get a working link.";
+} else {
+  loadMessages().catch(() => {}) // without them failures show their keys; everything else still works
+    .then(() => loadState())
+    .then(() => takeLinkFromAddress())
+    .catch((e) => { $("tools-banner").hidden = false; $("tools-banner").textContent = e.message; });
+  connect();
+}
+</script>
+</body>
+</html>
