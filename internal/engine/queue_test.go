@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -75,5 +76,37 @@ func TestPersistResumesQueue(t *testing.T) {
 	}
 	if after[1].Photos == nil || after[1].Pad != 3 {
 		t.Errorf("photo request not saved: %+v", after[1])
+	}
+}
+
+func TestPersistKeepsNewestFinished(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "queue.json")
+	start := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	var saved []savedJob
+	for i := range maxFinished + 20 {
+		saved = append(saved, savedJob{Job: Job{ID: strconv.Itoa(i + 1), URL: "https://example.com/v", State: Done, Created: start.Add(time.Duration(i) * time.Minute)}})
+	}
+	data, _ := json.Marshal(saved)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hub := events.NewHub()
+	e := New(nil, tools.New(dir, hub, func() string { return "stable" }), hub)
+	e.Persist(path)
+
+	jobs := e.Jobs()
+	if len(jobs) != maxFinished {
+		t.Fatalf("kept %d finished jobs, want %d", len(jobs), maxFinished)
+	}
+	e.mu.Lock()
+	_, oldest := e.jobs["1"]
+	_, newest := e.jobs[strconv.Itoa(maxFinished+20)]
+	e.mu.Unlock()
+	if oldest || !newest {
+		t.Errorf("kept the oldest %v, the newest %v; want the newest only", oldest, newest)
+	}
+	if id := e.Download(Request{URL: "https://example.com/b"}).ID; id != strconv.Itoa(maxFinished+21) {
+		t.Errorf("new job got ID %s, want %d: IDs mustn't be reused", id, maxFinished+21)
 	}
 }

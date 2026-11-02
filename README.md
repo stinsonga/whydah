@@ -23,7 +23,8 @@ whydah refit                         # update yt-dlp and gallery-dl to their lat
 whydah salvage --audio URL           # audio only (format from settings, default mp3)
 whydah salvage --output ~/Movies URL # download folder for this run
 whydah salvage --browser firefox URL # use that browser's cookies (private / members-only)
-whydah salvage --browser whydah URL  # use Whydah's sign-in browser (sign in from Settings first)
+whydah salvage --browser whydah URL  # use Whydah's sign-in browser (sign in first)
+whydah sign-in [URL]                 # open the sign-in browser (at URL); in the running app if there is one
 whydah spyglass --crows-nest URL     # find photos by loading the page in a hidden browser
 whydah spyglass --linked URL         # check the videos a page's thumbnails link to
 whydah salvage --linked URL          # ...and download them
@@ -107,7 +108,8 @@ gallery-dl get its cookies (as a cookies.txt that's deleted after each run).
 A failure that being signed in would fix offers **Sign in to *site*** to
 open that page in the window. The profile stays in Whydah's settings
 folder until **Sign out of everything** deletes it. While the window is
-open, looks that need the profile ask you to close it first.
+open, looks that need the profile wait for you to close it. `whydah
+sign-in [URL]` opens the window from a terminal.
 
 ### Streams from a site's own player
 
@@ -207,8 +209,13 @@ The hold is kept in `queue.json` next to the settings. Downloads that were
 queued or running when Whydah quit (or crashed, or the Mac restarted) start
 again on the next launch: yt-dlp carries on from its `.part` file and
 galleries skip the photos already saved. Finished ones stay listed, with
-**Retry** on the failed ones, until you clear them. Terminal salvages
-aren't kept.
+**Retry** on the failed ones, until you clear them; past 500, the oldest
+drop off (History still has them). Terminal salvages aren't kept.
+
+A stream the crow's nest caught often has a link that expires. If its
+download fails because the link stopped working (after waiting in the
+hold, or on a retry the next day), Whydah opens the page it was found on
+again for a fresh link and tries once more.
 
 ## Helpers
 
@@ -262,9 +269,17 @@ Requires Go 1.26+. No cgo, so every platform cross-compiles from any machine.
 make build   # ./bin/whydah for this machine
 make app     # bin/Whydah.app, a universal macOS app (see below)
 make dist    # dist/whydah-{darwin,windows,linux}-{arch}
-make vet
+make vet      # this platform, Windows and Linux
 go test ./...
+make e2e      # end-to-end tests (below)
 ```
+
+`make e2e` serves test pages locally (a player in an iframe from another
+site, a podcast player set up by a script, a listing of custom players, a
+stream whose link expires). Whydah looks at each with the crow's nest and
+downloads what it finds. It needs a Chromium-family browser and the helpers
+Whydah downloads on first run, and takes a couple of minutes. Settings and
+downloads go to throwaway folders.
 
 ### The macOS app
 
@@ -333,8 +348,7 @@ other websites can't drive it from your browser.
 - On a linked page yt-dlp can't read, the crow's nest keeps the first
   stream it sees play, which is now and then a trailer rather than the
   video. Past the first 40 such pages in one check, the rest come back as
-  "not a video". A stream link that expires may fail if it waits in the
-  queue too long; checking the links again gets fresh ones.
+  "not a video".
 - DRM-protected streams (most paid streaming services) can't be salvaged.
   Players that need several clicks, or a sign-in the crow's nest doesn't
   have, won't play, so nothing is caught. Stream links that work only once

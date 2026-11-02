@@ -117,7 +117,7 @@ func TestSignInProfile(t *testing.T) {
 	}
 
 	b.mu.Lock()
-	b.signingIn = true // as while the sign-in window is open
+	b.hold() // as while the sign-in window is open
 	b.mu.Unlock()
 	if _, _, _, err := b.tab(ctx, path, profile, newPageWatch()); err == nil {
 		t.Error("a look used the profile while the sign-in window had it")
@@ -127,9 +127,19 @@ func TestSignInProfile(t *testing.T) {
 	} else {
 		done()
 	}
+	short, cancelShort := context.WithTimeout(ctx, 100*time.Millisecond)
+	if err := b.waitSignIn(short); err == nil {
+		t.Error("waitSignIn returned while the window was open")
+	}
+	cancelShort()
+	waited := make(chan error, 1)
+	go func() { waited <- b.waitSignIn(ctx) }()
 	b.mu.Lock()
-	b.signingIn = false
+	b.unhold() // the window closes
 	b.mu.Unlock()
+	if err := <-waited; err != nil {
+		t.Errorf("waitSignIn after the window closed: %v", err)
+	}
 
 	if err := b.forget(profile); err != nil {
 		t.Fatal(err)

@@ -80,24 +80,36 @@ type renderedPage struct {
 // settled, which images it downloaded and which streams it played.
 type pageWatch struct {
 	session  string
-	attached chan string // iframe sessions to set up, from Target.attachedToTarget
+	attached chan struct{} // signalled when attaching grows
 
-	mu       sync.Mutex
-	frames   map[string]bool      // iframe sessions
-	inflight map[string]time.Time // request id -> when it started
-	sent     map[string]sentRequest
-	last     time.Time // last request started or finished
-	loaded   bool
-	images   []string // image responses, in arrival order
-	streams  []Stream // in arrival order
-	seen     map[string]bool
+	mu        sync.Mutex
+	frames    map[string]bool      // iframe sessions
+	attaching []attachedTarget     // targets Chrome is holding until they're set up
+	inflight  map[string]time.Time // request id -> when it started
+	sent      map[string]sentRequest
+	last      time.Time // last request started or finished
+	loaded    bool
+	images    []string // image responses, in arrival order
+	streams   []Stream // in arrival order
+	seen      map[string]bool
+}
+
+// maxFrames is how many of a page's iframes are watched; a page with more
+// is mostly ads, and the rest go unwatched.
+const maxFrames = 64
+
+// attachedTarget is an iframe, worker or the like that Chrome started for
+// the page, paused until it's set up (frame: watched) and resumed.
+type attachedTarget struct {
+	session string
+	frame   bool
 }
 
 // sentRequest is what a stream needs of its request: who it said it came from.
 type sentRequest struct{ referer, origin, document string }
 
 func newPageWatch() *pageWatch {
-	return &pageWatch{attached: make(chan string, 64), frames: map[string]bool{}, inflight: map[string]time.Time{},
+	return &pageWatch{attached: make(chan struct{}, 1), frames: map[string]bool{}, inflight: map[string]time.Time{},
 		sent: map[string]sentRequest{}, seen: map[string]bool{}, last: time.Now()}
 }
 
@@ -147,12 +159,17 @@ func (w *pageWatch) event(m cdpMsg) {
 	w.last = time.Now()
 	switch m.Method {
 	case "Target.attachedToTarget":
-		if p.TargetInfo.Type == "iframe" && !w.frames[p.SessionID] {
+		// Every target attached is paused (waitForDebuggerOnStart), so
+		// an iframe's first requests aren't missed while it's set up, and
+		// must be resumed, watched or not.
+		frame := p.TargetInfo.Type == "iframe" && !w.frames[p.SessionID] && len(w.frames) < maxFrames
+		if frame {
 			w.frames[p.SessionID] = true
-			select {
-			case w.attached <- p.SessionID:
-			default: // a page with dozens of iframes; the rest go unwatched
-			}
+		}
+		w.attaching = append(w.attaching, attachedTarget{p.SessionID, frame})
+		select {
+		case w.attached <- struct{}{}:
+		default:
 		}
 	case "Network.requestWillBeSent":
 		w.inflight[p.RequestID] = time.Now()
@@ -240,6 +257,11 @@ func (e *Engine) renderStreams(ctx context.Context, paths tools.Paths, s config.
 }
 
 func (e *Engine) render(ctx context.Context, paths tools.Paths, s config.Settings, pageURL string, streamsOnly bool) (Metadata, error) {
+	if e.usesSignIn(s) { // while the sign-in window is open, and not against the time limit
+		if err := e.browsers.waitSignIn(ctx); err != nil {
+			return Metadata{}, err
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, map[bool]time.Duration{false: renderTimeout, true: streamTimeout}[streamsOnly])
 	defer cancel()
 	var browser, profile string
@@ -280,6 +302,7 @@ func (e *Engine) render(ctx context.Context, paths tools.Paths, s config.Setting
 	}
 	_ = h.cdp.call(ctx, "", "Browser.getVersion", nil, &version)
 	userAgent := map[string]any{"userAgent": strings.ReplaceAll(version.UserAgent, "HeadlessChrome", "Chrome")} // sites turn away "HeadlessChrome"
+	autoAttach := map[string]any{"autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true}
 	for _, c := range []struct {
 		method string
 		params any
@@ -290,7 +313,7 @@ func (e *Engine) render(ctx context.Context, paths tools.Paths, s config.Setting
 		{"Emulation.setDeviceMetricsOverride", map[string]any{"width": 1366, "height": 900, "deviceScaleFactor": 2, "mobile": false}},
 		{"Network.setUserAgentOverride", userAgent},
 		// Cross-site iframes (embedded players, mostly) are targets of their own.
-		{"Target.setAutoAttach", map[string]any{"autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true}},
+		{"Target.setAutoAttach", autoAttach},
 	} {
 		if err := h.cdp.call(ctx, session, c.method, c.params, nil); err != nil {
 			return Metadata{}, err
@@ -299,10 +322,19 @@ func (e *Engine) render(ctx context.Context, paths tools.Paths, s config.Setting
 	go func() { // set up each iframe as it attaches, so its streams are seen too
 		for {
 			select {
-			case frame := <-w.attached:
-				_ = h.cdp.call(ctx, frame, "Network.setUserAgentOverride", userAgent, nil)
-				_ = h.cdp.call(ctx, frame, "Network.enable", nil, nil)
-				_ = h.cdp.call(ctx, frame, "Target.setAutoAttach", map[string]any{"autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true}, nil)
+			case <-w.attached:
+				w.mu.Lock()
+				targets := w.attaching
+				w.attaching = nil
+				w.mu.Unlock()
+				for _, t := range targets {
+					if t.frame {
+						_ = h.cdp.call(ctx, t.session, "Network.setUserAgentOverride", userAgent, nil)
+						_ = h.cdp.call(ctx, t.session, "Network.enable", nil, nil)
+						_ = h.cdp.call(ctx, t.session, "Target.setAutoAttach", autoAttach, nil)
+					}
+					_ = h.cdp.call(ctx, t.session, "Runtime.runIfWaitingForDebugger", nil, nil)
+				}
 			case <-ctx.Done():
 				return
 			case <-h.cdp.closed:

@@ -19,7 +19,7 @@ import (
 // With the sign-in browser chosen for cookies (signin.go), the browser runs
 // on the sign-in profile instead, and looks share its cookies and storage.
 // Chrome runs one browser per profile, so while the sign-in window is open
-// the pool leaves the profile to it.
+// the pool leaves the profile to it, and looks on it wait.
 
 const browserIdle = 2 * time.Minute
 
@@ -32,8 +32,39 @@ type browserPool struct {
 	idle     *time.Timer
 	watchers map[*pageWatch]bool
 
-	signingIn bool      // the sign-in window has the profile, or is about to
-	signin    *headless // the sign-in window's browser, once started
+	signingIn bool          // the sign-in window has the profile, or is about to (or it's being deleted)
+	signin    *headless     // the sign-in window's browser, once started
+	released  chan struct{} // closed when signingIn ends
+}
+
+// hold keeps looks off the sign-in profile until unhold. b.mu must be held.
+func (b *browserPool) hold() {
+	b.signingIn = true
+	b.released = make(chan struct{})
+}
+
+// unhold lets looks use the sign-in profile again. b.mu must be held.
+func (b *browserPool) unhold() {
+	if b.signingIn {
+		b.signingIn = false
+		close(b.released)
+	}
+}
+
+// waitSignIn waits until nothing holds the sign-in profile.
+func (b *browserPool) waitSignIn(ctx context.Context) error {
+	b.mu.Lock()
+	held, released := b.signingIn, b.released
+	b.mu.Unlock()
+	if !held {
+		return nil
+	}
+	select {
+	case <-released:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // dispatch hands a browser event to every look; each keeps its own tab's.
@@ -148,11 +179,11 @@ type cdpCookie struct {
 // open, otherwise from the headless browser on it.
 func (b *browserPool) cookies(ctx context.Context, path, profile string) ([]cdpCookie, error) {
 	b.mu.Lock()
-	h, signingIn := b.signin, b.signingIn
+	h := b.signin
 	b.mu.Unlock()
 	if h == nil {
-		if signingIn { // the window is still starting
-			return nil, i18n.New("error.signin_open")
+		if err := b.waitSignIn(ctx); err != nil { // the window is starting, or the profile is being deleted
+			return nil, err
 		}
 		var release func()
 		var err error
@@ -189,7 +220,7 @@ func (b *browserPool) openSignIn(ctx context.Context, path, profile, url string,
 		}
 		old, b.h = b.h, nil
 	}
-	b.signingIn = true
+	b.hold()
 	b.mu.Unlock()
 
 	if old != nil {
@@ -198,7 +229,7 @@ func (b *browserPool) openSignIn(ctx context.Context, path, profile, url string,
 	h, err := startBrowser(ctx, path, browserOpts{profile: profile, visible: true, url: url}, nil)
 	b.mu.Lock()
 	if err != nil {
-		b.signingIn = false
+		b.unhold()
 		b.mu.Unlock()
 		return err
 	}
@@ -240,7 +271,8 @@ func (b *browserPool) watchSignIn(h *headless, ended func()) {
 	}
 	h.close()
 	b.mu.Lock()
-	b.signingIn, b.signin = false, nil
+	b.signin = nil
+	b.unhold()
 	b.mu.Unlock()
 	slog.Info("sign-in browser closed")
 	ended()
@@ -271,11 +303,11 @@ func (b *browserPool) forget(profile string) error {
 		}
 		old, b.h = b.h, nil
 	}
-	b.signingIn = true // keep looks off the profile while it goes
+	b.hold() // keep looks off the profile while it goes
 	b.mu.Unlock()
 	defer func() {
 		b.mu.Lock()
-		b.signingIn = false
+		b.unhold()
 		b.mu.Unlock()
 	}()
 	if old != nil {

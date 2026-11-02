@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/url"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -276,4 +277,55 @@ func streamArgs(referer, origin string) []string {
 		args = append(args, "--add-header", "Origin:"+origin)
 	}
 	return args
+}
+
+// staleLink matches what yt-dlp says when a stream link has stopped working:
+// links with a token in them expire, often within hours.
+var staleLink = regexp.MustCompile(`(?i)\b(401|403|404|410)\b|forbidden|unauthori[sz]ed|not found|\bgone\b|expired`)
+
+// refreshStream goes back to the page a stream was found on for a fresh link
+// to it, after a download of it failed with err, and reports whether it got
+// one. It's for streams the crow's nest caught, whose links expire: a job
+// that waited in the queue too long, or a retry the next day.
+func (e *Engine) refreshStream(ctx context.Context, j *Job, paths tools.Paths, s config.Settings, err error) bool {
+	e.mu.Lock()
+	page, old := j.Page, j.URL
+	e.mu.Unlock()
+	if page == "" || !staleLink.MatchString(err.Error()) || !e.tools.BrowserReady() {
+		return false
+	}
+	slog.Info("stream link stopped working; looking again", "url", old, "page", page, "err", err)
+	md, rerr := e.renderStreams(ctx, paths, s, page)
+	if rerr != nil || len(md.Streams) == 0 {
+		slog.Info("no fresh stream link", "page", page, "err", rerr)
+		return false
+	}
+	st := sameStream(md.Streams, old)
+	if st.URL == old {
+		return false // the same link: looking again won't help
+	}
+	e.mutate(j, func(j *Job) {
+		j.URL, j.Referer, j.Origin = st.URL, st.Referer, st.Origin
+		j.Percent, j.Downloaded, j.Total, j.Speed, j.ETA = 0, 0, 0, 0, 0
+	})
+	slog.Info("fresh stream link", "url", st.URL)
+	return true
+}
+
+// sameStream picks the stream in streams that's at old's address (the query,
+// where tokens go, aside), or else the first.
+func sameStream(streams []Stream, old string) Stream {
+	key := func(link string) string {
+		u, err := url.Parse(link)
+		if err != nil {
+			return link
+		}
+		return u.Host + u.Path
+	}
+	for _, st := range streams {
+		if key(st.URL) == key(old) {
+			return st
+		}
+	}
+	return streams[0]
 }

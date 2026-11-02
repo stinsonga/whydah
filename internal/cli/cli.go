@@ -1,5 +1,6 @@
 // Package cli is the terminal mode: salvage (download), spyglass (look
-// without downloading) and refit (update the tools).
+// without downloading), refit (update the tools) and sign-in (open the
+// sign-in browser).
 package cli
 
 import (
@@ -99,7 +100,7 @@ func Salvage(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *ev
 			if ctx.Err() != nil {
 				return 130
 			}
-			fmt.Printf("✗ %s: %s\n", url, explained(err))
+			fmt.Printf("✗ %s: %s\n", url, Explained(err))
 			p.failed++
 			continue
 		}
@@ -109,7 +110,7 @@ func Salvage(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *ev
 				if ctx.Err() != nil {
 					return 130
 				}
-				fmt.Printf("✗ %s: %s\n", url, explained(err))
+				fmt.Printf("✗ %s: %s\n", url, Explained(err))
 				p.failed++
 				continue
 			}
@@ -188,7 +189,7 @@ func Spyglass(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *e
 			if ctx.Err() != nil {
 				return 130
 			}
-			fmt.Printf("✗ %s: %s\n", url, explained(err))
+			fmt.Printf("✗ %s: %s\n", url, Explained(err))
 			failed++
 			continue
 		}
@@ -287,6 +288,29 @@ func pendingList(pending []tools.PendingUpdate) string {
 }
 
 // Refit updates yt-dlp and gallery-dl and returns a process exit code.
+// SignIn opens the sign-in window at link (or its new tab page) and waits
+// for it to be closed.
+func SignIn(ctx context.Context, eng *engine.Engine, hub *events.Hub, link string) int {
+	ch, unsubscribe := hub.Subscribe()
+	defer unsubscribe()
+	if err := eng.SignIn(ctx, link); err != nil {
+		fmt.Fprintln(os.Stderr, "✗", Explained(err))
+		return 1
+	}
+	fmt.Println("Sign in to the sites you need in the window that opened, then close it.")
+	for {
+		select {
+		case ev := <-ch:
+			if st, ok := ev.Data.(engine.SignInStatus); ok && !st.Open {
+				fmt.Println("✓ Signed in. Choose \"Whydah's own sign-in browser\" for cookies in Settings, or use --browser whydah.")
+				return 0
+			}
+		case <-ctx.Done():
+			return 130
+		}
+	}
+}
+
 func Refit(ctx context.Context, tm *tools.Manager) int {
 	if _, err := tm.Wait(ctx); err != nil {
 		fmt.Println("✗", err)
@@ -396,9 +420,9 @@ func SetLanguage(setting string) {
 	Lang = i18n.Match(os.Getenv("LC_ALL"), os.Getenv("LC_MESSAGES"), os.Getenv("LANG"))
 }
 
-// explained is a failure in the user's language, with what the tool said
+// Explained is a failure in the user's language, with what the tool said
 // on the next line when that says more.
-func explained(err error) string { return problemText(i18n.From(err)) }
+func Explained(err error) string { return problemText(i18n.From(err)) }
 
 func problemText(p *i18n.Error) string {
 	msg := p.In(Lang)

@@ -14,7 +14,10 @@ import (
 // The queue is kept in a file so that downloads queued or running when
 // Whydah quit (or crashed) start again on the next launch, and finished ones
 // stay listed until cleared. yt-dlp carries on from its .part files and photo
-// jobs skip what's saved, so a resumed job doesn't start from scratch.
+// jobs skip what's saved, so a resumed job doesn't start from scratch. Only
+// the newest maxFinished finished jobs are kept; History has the rest.
+
+const maxFinished = 500
 
 // savedJob is a Job with the unexported fields a resumed or retried job needs.
 type savedJob struct {
@@ -51,6 +54,7 @@ func (e *Engine) Persist(path string) {
 			resume = append(resume, &j)
 		}
 	}
+	e.pruneFinished()
 	e.mu.Unlock()
 	go e.saver()
 
@@ -59,6 +63,23 @@ func (e *Engine) Persist(path string) {
 	}
 	if len(saved) > 0 {
 		slog.Info("restored queue", "jobs", len(saved), "resumed", len(resume))
+	}
+}
+
+// pruneFinished forgets the oldest finished jobs past maxFinished. e.mu must be held.
+func (e *Engine) pruneFinished() {
+	var finished []*Job
+	for _, j := range e.jobs {
+		if _, active := e.cancels[j.ID]; j.State.Finished() && !active {
+			finished = append(finished, j)
+		}
+	}
+	if len(finished) <= maxFinished {
+		return
+	}
+	sort.Slice(finished, func(a, b int) bool { return finished[a].Created.After(finished[b].Created) })
+	for _, j := range finished[maxFinished:] {
+		delete(e.jobs, j.ID)
 	}
 }
 
@@ -95,6 +116,7 @@ func (e *Engine) saveQueue() {
 		e.mu.Unlock()
 		return
 	}
+	e.pruneFinished()
 	saved := make([]savedJob, 0, len(e.jobs))
 	for _, j := range e.jobs {
 		saved = append(saved, savedJob{Job: *j, Pad: j.pad, Photos: j.photos})

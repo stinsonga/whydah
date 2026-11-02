@@ -56,6 +56,7 @@ Usage:
   whydah salvage [flags] URL...   download everything at each link (or just: whydah URL...)
   whydah spyglass URL...          show what each link has, without downloading
   whydah refit                    update the helper tools to their latest releases
+  whydah sign-in [URL]            open Whydah's own browser to sign in to sites (at URL)
 
 Flags:
 `)
@@ -67,7 +68,7 @@ Flags:
 	command, urls := "", flag.Args()
 	if len(urls) > 0 {
 		switch urls[0] {
-		case "salvage", "spyglass", "refit", "help":
+		case "salvage", "spyglass", "refit", "sign-in", "help":
 			command = urls[0]
 			_ = flag.CommandLine.Parse(urls[1:])
 			urls = flag.Args()
@@ -88,6 +89,9 @@ Flags:
 		return 2
 	case command == "refit" && len(urls) > 0:
 		fmt.Fprintln(os.Stderr, "whydah refit takes no links")
+		return 2
+	case command == "sign-in" && len(urls) > 1:
+		fmt.Fprintln(os.Stderr, "whydah sign-in takes at most one link")
 		return 2
 	}
 
@@ -132,7 +136,16 @@ Flags:
 		return 1
 	}
 
-	running := (command == "" || command == "refit") && web.PingExisting(*port)
+	running := (command == "" || command == "refit" || command == "sign-in") && web.PingExisting(*port)
+	if command == "sign-in" && running {
+		cli.SetLanguage(settings.Get().Language)
+		if err := web.SignInExisting(*port, token, strings.Join(urls, "")); err != nil {
+			fmt.Fprintln(os.Stderr, "✗", cli.Explained(err))
+			return 1
+		}
+		fmt.Println("Opened the sign-in window of the Whydah that's running. Close it when you're done.")
+		return 0
+	}
 	if command == "refit" && running {
 		// The update lock is per process, so let the running app do it safely.
 		fmt.Println("Whydah is running; use Refit in its window, or quit it first.")
@@ -171,6 +184,8 @@ Flags:
 		return cli.Salvage(ctx, eng, tm, hub, urls, *audio, *linked, engine.InspectOptions{CrowsNest: *crowsNest})
 	case "spyglass":
 		return cli.Spyglass(ctx, eng, tm, hub, urls, *linked, engine.InspectOptions{CrowsNest: *crowsNest})
+	case "sign-in":
+		return cli.SignIn(ctx, eng, hub, strings.Join(urls, ""))
 	}
 
 	eng.KeepHistory(filepath.Join(appDir, "history.jsonl")) // first: resumed downloads that finish go in it

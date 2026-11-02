@@ -45,10 +45,12 @@ func read() (string, error) {
 	}
 	defer globalUnlock.Call(h)
 
-	// p is memory owned by Windows, not the Go heap, so vet's
-	// "possible misuse of unsafe.Pointer" warning doesn't apply here.
+	// p is memory owned by Windows, not the Go heap, so the garbage collector
+	// can't move it. Reinterpreting the variable, rather than converting
+	// the uintptr, says so to vet.
+	text := *(*unsafe.Pointer)(unsafe.Pointer(&p))
 	var buf []uint16
-	for ptr := unsafe.Pointer(p); len(buf) < maxChars; ptr = unsafe.Add(ptr, 2) {
+	for ptr := text; len(buf) < maxChars; ptr = unsafe.Add(ptr, 2) {
 		c := *(*uint16)(ptr)
 		if c == 0 {
 			break

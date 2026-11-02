@@ -468,6 +468,9 @@ func (e *Engine) run(ctx context.Context, j *Job) {
 		err = e.runPagePhotos(ctx, j, paths, s)
 	default:
 		err = e.runYtDlp(ctx, j, paths, s)
+		if err != nil && ctx.Err() == nil && e.refreshStream(ctx, j, paths, s, err) {
+			err = e.runYtDlp(ctx, j, paths, s)
+		}
 	}
 	if err != nil {
 		fail(err)

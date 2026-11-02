@@ -6,6 +6,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	_ "embed"
@@ -578,6 +579,35 @@ func PingExisting(port int) bool {
 		App string `json:"app"`
 	}
 	return json.NewDecoder(resp.Body).Decode(&body) == nil && body.App == appID
+}
+
+// SignInExisting asks the Whydah running on port to open its sign-in window
+// at link, since two of them can't share the sign-in profile.
+func SignInExisting(port int, token, link string) error {
+	body, _ := json.Marshal(map[string]string{"url": link})
+	req, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:"+strconv.Itoa(port)+"/api/signin", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Token", token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: time.Minute}).Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	var out struct {
+		Error   string      `json:"error"`
+		Problem *i18n.Error `json:"problem"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	if out.Problem != nil {
+		return out.Problem
+	}
+	return errors.New(firstNonEmpty(out.Error, resp.Status))
 }
 
 func firstNonEmpty(vals ...string) string {

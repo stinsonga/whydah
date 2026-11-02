@@ -66,6 +66,7 @@
   "ui.signout_confirm": "Sign out of every site in Whydah's sign-in browser? This deletes its profile.",
   "ui.signin_hint": "For sites that don't keep you signed in with your browser's cookies. Opens a {browser} window with a profile of Whydah's own: sign in to the sites you need, then close the window.",
   "ui.signin_open": "The sign-in window is open. Close it when you're done.",
+  "ui.signin_waiting": "Waiting for you to close the sign-in window…",
   "ui.history": "History",
   "ui.history_search": "Search titles, sites and links",
   "ui.history_count.one": "1 download",

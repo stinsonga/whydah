@@ -1,20 +1,21 @@
 package web
 
 import (
-	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	"whydah/internal/tools"
 )
 
 // OpenPath opens a URL, file or folder with the OS default handler.
 func OpenPath(target string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", target).Start()
+		return tools.StartOutside("open", target)
 	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", target).Start()
+		return tools.StartOutside("rundll32", "url.dll,FileProtocolHandler", target)
 	default:
-		return exec.Command("xdg-open", target).Start()
+		return tools.StartOutside("xdg-open", target)
 	}
 }
 
@@ -22,9 +23,9 @@ func OpenPath(target string) error {
 func RevealFile(path string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", "-R", path).Start()
+		return tools.StartOutside("open", "-R", path)
 	case "windows":
-		return exec.Command("explorer", "/select,", path).Start()
+		return tools.StartOutside("explorer", "/select,", path)
 	default:
 		return OpenPath(filepath.Dir(path))
 	}

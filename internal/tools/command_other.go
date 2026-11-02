@@ -20,3 +20,9 @@ func Command(ctx context.Context, name string, args ...string) *exec.Cmd {
 	}
 	return cmd
 }
+
+// StartOutside starts a program that should outlive Whydah, such as the
+// browser a link opens in.
+func StartOutside(name string, args ...string) error {
+	return exec.Command(name, args...).Start()
+}

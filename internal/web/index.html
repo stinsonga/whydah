@@ -622,6 +622,7 @@ function previewCard(key, p) {
     return el("div", { class: "card preview" }, thumb(),
       el("div", {}, el("div", { class: "title" }, p.mode === "crow" ? "Up in the crow's nest…" : p.photos ? "Looking for photos…" : "Looking through the spyglass…"),
         el("div", { class: "meta" }, p.mode === "crow" ? `Loading ${url} in a hidden browser` : url),
+        signInWaiting() ? el("div", { class: "meta" }, t("ui.signin_waiting")) : null,
         el("div", { class: "bar indeterminate" }, el("div")),
         el("div", { class: "actions" }, el("button", { type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
   }
@@ -998,6 +999,9 @@ function renderSignIn() {
   $("s-signin-status").textContent = si.open ? t("ui.signin_open") : "";
 }
 
+// signInWaiting reports whether looks wait for the sign-in window to close.
+const signInWaiting = () => !!(state.signin && state.signin.open && state.settings && state.settings.browser_cookies === "whydah");
+
 function signInFailed(e) {
   const msg = e.problem ? problemText(e.problem) : e.message;
   if ($("settings").open) $("s-signin-error").textContent = msg;
@@ -1105,7 +1109,11 @@ function connect() {
     }
     else if (ev.type === "url_detected") inspect(ev.data.url);
     else if (ev.type === "links_progress") linksProgress(ev.data);
-    else if (ev.type === "signin_status") { state.signin = ev.data; renderSignIn(); }
+    else if (ev.type === "signin_status") {
+      state.signin = ev.data; renderSignIn();
+      for (const p of state.previews.values()) if (p.status === "loading" && p.mode !== "links") p.el = null; // the waiting note
+      renderPreviews();
+    }
   };
 }
 

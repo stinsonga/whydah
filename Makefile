@@ -2,7 +2,7 @@ VERSION ?= $(shell date +%Y.%m.%d)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 TARGETS := darwin/arm64 darwin/amd64 windows/amd64 linux/amd64 linux/arm64
 
-.PHONY: build run dist vet clean app icon winres
+.PHONY: build run dist vet e2e clean app icon winres
 
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/whydah .
@@ -12,7 +12,12 @@ run: build
 
 vet:
 	go vet ./...
-	GOOS=windows go vet ./internal/web/... ./internal/engine/... ./internal/tools/...
+	GOOS=windows go vet ./...
+	GOOS=linux go vet ./...
+
+# End-to-end tests: real pages, browser and helpers (see README).
+e2e:
+	WHYDAH_E2E=1 go test -count=1 -run TestE2E -timeout 15m ./internal/engine
 
 # One self-contained binary per platform, cross-compiled from any machine.
 dist:
