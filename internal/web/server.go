@@ -12,7 +12,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -94,6 +96,9 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	mux.HandleFunc("POST /api/history/forget", s.auth(s.forgetHistory))
 	mux.HandleFunc("POST /api/open-folder", s.auth(s.openFolder))
 	mux.HandleFunc("PUT /api/settings", s.auth(s.putSettings))
+	mux.HandleFunc("POST /api/signin", s.auth(s.signIn))
+	mux.HandleFunc("POST /api/signout", s.auth(s.signOut))
+	mux.HandleFunc("GET /api/image", s.auth(s.image))
 	mux.HandleFunc("POST /api/tools/check", s.auth(s.checkUpdate))
 	mux.HandleFunc("POST /api/tools/update", s.auth(s.installUpdate))
 	mux.HandleFunc("POST /api/quit", s.auth(s.quit))
@@ -146,15 +151,16 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 }
 
 type stateResponse struct {
-	Settings          config.Settings `json:"settings"`
-	Jobs              []engine.Job    `json:"jobs"`
-	Tools             tools.Status    `json:"tools"`
-	Browsers          []string        `json:"browsers"`           // detected installed
-	SupportedBrowsers []string        `json:"supported_browsers"` // all yt-dlp knows
-	AudioFormats      []string        `json:"audio_formats"`
-	NameTokens        []string        `json:"name_tokens"`
-	VideoQualities    []string        `json:"video_qualities"`
-	UpdateChannels    []string        `json:"update_channels"`
+	Settings          config.Settings     `json:"settings"`
+	Jobs              []engine.Job        `json:"jobs"`
+	Tools             tools.Status        `json:"tools"`
+	Browsers          []string            `json:"browsers"`           // detected installed
+	SupportedBrowsers []string            `json:"supported_browsers"` // all yt-dlp knows
+	AudioFormats      []string            `json:"audio_formats"`
+	NameTokens        []string            `json:"name_tokens"`
+	VideoQualities    []string            `json:"video_qualities"`
+	UpdateChannels    []string            `json:"update_channels"`
+	SignIn            engine.SignInStatus `json:"signin"`
 }
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
@@ -168,6 +174,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		VideoQualities:    config.VideoQualities,
 		UpdateChannels:    config.UpdateChannels,
 		NameTokens:        config.NameTokens,
+		SignIn:            s.Engine.SignInStatus(),
 	})
 }
 
@@ -441,6 +448,56 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}()
 	}
 	writeJSON(w, out)
+}
+
+// signIn opens the sign-in window, at the page given if any; its status
+// arrives as signin_status events.
+func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		URL string `json:"url"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
+	defer cancel()
+	if err := s.Engine.SignIn(ctx, in.URL); err != nil {
+		problemError(w, http.StatusConflict, err)
+		return
+	}
+	writeJSON(w, s.Engine.SignInStatus())
+}
+
+func (s *Server) signOut(w http.ResponseWriter, r *http.Request) {
+	if err := s.Engine.SignOut(); err != nil {
+		problemError(w, http.StatusConflict, err)
+		return
+	}
+	writeJSON(w, s.Engine.SignInStatus())
+}
+
+// image passes on an image found with the sign-in browser (see
+// engine.FetchImage), so the UI can show it. Only images are passed on, and
+// never SVG, since anything else could run script as this page.
+func (s *Server) image(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	resp, err := s.Engine.FetchImage(ctx, r.URL.Query().Get("u"), r.URL.Query().Get("page"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	ctype, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(ctype, "image/") || ctype == "image/svg+xml" {
+		http.Error(w, "not an image: "+resp.Status+" "+ctype, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = io.Copy(w, io.LimitReader(resp.Body, 50<<20))
 }
 
 func (s *Server) checkUpdate(w http.ResponseWriter, r *http.Request) {

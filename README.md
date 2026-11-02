@@ -1,10 +1,9 @@
 # Whydah
 
-Salvage video, audio and photos from the web: YouTube, Vimeo, X, TikTok,
-SoundCloud and the other sites [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-supports, photo galleries from Instagram, Reddit, Imgur, Flickr and the
-other sites [gallery-dl](https://github.com/mikf/gallery-dl) supports, and the
-images on any other web page. It's a single executable with no runtime to
+Salvage video, audio and photos from the web: video and audio from the
+sites [yt-dlp](https://github.com/yt-dlp/yt-dlp) supports, photo galleries
+from the sites [gallery-dl](https://github.com/mikf/gallery-dl) supports,
+and the images and streams on any other web page. It's a single executable with no runtime to
 install: run it and a UI opens in your browser.
 
 Named after the *Whydah*, Samuel Bellamy's flagship, so a few things have
@@ -24,6 +23,7 @@ whydah refit                         # update yt-dlp and gallery-dl to their lat
 whydah salvage --audio URL           # audio only (format from settings, default mp3)
 whydah salvage --output ~/Movies URL # download folder for this run
 whydah salvage --browser firefox URL # use that browser's cookies (private / members-only)
+whydah salvage --browser whydah URL  # use Whydah's sign-in browser (sign in from Settings first)
 whydah spyglass --crows-nest URL     # find photos by loading the page in a hidden browser
 whydah spyglass --linked URL         # check the videos a page's thumbnails link to
 whydah salvage --linked URL          # ...and download them
@@ -96,6 +96,19 @@ the site being looked at are loaded into the hidden browser and sent with
 the photo downloads. Nothing else is kept; the exported file is deleted
 straight away.
 
+Some sites still come up signed out that way: the session is tied to the
+browser it was made in, or kept in the page's storage rather than in a
+cookie. For those, choose **Whydah's own sign-in browser** as the cookie
+source and press **Sign in to sites…**. That opens a window of your
+installed Chrome, Edge, Brave, Chromium or Vivaldi with a profile of
+Whydah's own; sign in to the sites you need, then close the window. The
+crow's nest then runs on that profile, storage and all, and yt-dlp and
+gallery-dl get its cookies (as a cookies.txt that's deleted after each run).
+A failure that being signed in would fix offers **Sign in to *site*** to
+open that page in the window. The profile stays in Whydah's settings
+folder until **Sign out of everything** deletes it. While the window is
+open, looks that need the profile ask you to close it first.
+
 ### Streams from a site's own player
 
 Sites with a player of their own, which yt-dlp has no extractor for, are
@@ -134,8 +147,15 @@ They show up as **N linked videos…** on the result (or as their own card on
 a page with no photos). Clicking it runs yt-dlp on each linked page, a few
 at a time, with progress; the ones with a video come back with their real
 titles and durations, to pick from like a playlist and salvage as video or
-audio into a folder named after the page. Script-built listings (TED's,
-for one) only have their thumbnails after the **Crow's nest**.
+audio into a folder named after the page. Script-built listings only
+have their thumbnails after the **Crow's nest**.
+
+A linked page yt-dlp can't read (a site's own player it doesn't know) then
+gets a short look from the crow's nest, three at a time and up to 40 per
+check: it starts the player and keeps the stream it loads, so the page's
+video comes back like the others. That takes a few seconds per page, so
+only the pages yt-dlp missed get one, and only when a browser is already
+there to use.
 
 ### Playlists and albums
 
@@ -144,8 +164,9 @@ which to download, with each item's thumbnail when the site has one (click
 it to enlarge; the arrow keys step through); from the terminal every item is downloaded. Items are
 saved to a folder named after the playlist as `01 - Title.ext`, and audio is
 tagged with the playlist as album, the position as track number, and cover
-art. A YouTube link opened from a playlist (`watch?v=…&list=…`) downloads
-just that video, with a **Whole playlist…** button for the rest.
+art. A video link opened from a playlist (`watch?v=…&list=…`, on sites
+that work that way) downloads just that video, with a **Whole playlist…**
+button for the rest.
 
 ### Photos
 
@@ -198,7 +219,7 @@ On first run it downloads its helpers (about 175 MB, shown in the UI):
 | yt-dlp | video and audio | always a managed copy, so the app can update it |
 | gallery-dl | photo galleries | managed copy from [gdl-org/builds](https://github.com/gdl-org/builds); a system copy on Intel Macs and ARM Linux, which have no build |
 | ffmpeg + ffprobe | merges video+audio, converts audio | system copy if on PATH, otherwise downloaded |
-| deno | solves YouTube's JS challenges | system copy if on PATH, otherwise downloaded |
+| deno | runs the JavaScript challenges some sites set yt-dlp | system copy if on PATH, otherwise downloaded |
 | a Chromium browser | the crow's nest | an installed Chrome, Edge, Chromium, Brave or Vivaldi, with its own throwaway profile; otherwise Google's [chrome-headless-shell](https://developer.chrome.com/blog/chrome-headless-shell), downloaded the first time it's needed (about 100 MB, 210 MB unpacked) |
 
 If a helper can't be obtained the app still works in a reduced mode and shows
@@ -309,9 +330,11 @@ other websites can't drive it from your browser.
   downloaded copy until you right-click → Open (or run
   `xattr -d com.apple.quarantine whydah`). Windows SmartScreen shows a
   similar warning.
-- Linked videos are only as good as yt-dlp on the linked page: a site's own
-  player that yt-dlp doesn't know comes back as "not a video" (streams are
-  only caught on the page you look at, not on every linked page).
+- On a linked page yt-dlp can't read, the crow's nest keeps the first
+  stream it sees play, which is now and then a trailer rather than the
+  video. Past the first 40 such pages in one check, the rest come back as
+  "not a video". A stream link that expires may fail if it waits in the
+  queue too long; checking the links again gets fresh ones.
 - DRM-protected streams (most paid streaming services) can't be salvaged.
   Players that need several clicks, or a sign-in the crow's nest doesn't
   have, won't play, so nothing is caught. Stream links that work only once
@@ -321,6 +344,7 @@ other websites can't drive it from your browser.
   endless feed after about 12 seconds. Pages often include some clutter
   (avatars, banners) that the picker lets you untick.
 - On macOS, using browser cookies needs Full Disk Access (System Settings →
-  Privacy & Security). Give it to Whydah.app, or, when running from a
-  terminal, to that terminal app, then reopen it. Without it macOS hides the
-  browser's profile, and Whydah says so.
+  Privacy & Security), except with Whydah's own sign-in browser. Give it to
+  Whydah.app, or, when running from a terminal, to that terminal app, then
+  reopen it. Without it macOS hides the browser's profile, and Whydah says
+  so.

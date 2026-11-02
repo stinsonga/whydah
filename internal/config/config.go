@@ -24,7 +24,7 @@ type Settings struct {
 	AudioFormat    string   `json:"audio_format"`    // mp3, m4a, opus, flac, wav
 	VideoQuality   string   `json:"video_quality"`   // best, 2160, 1440, 1080, 720, 480
 	CompatibleMP4  bool     `json:"compatible_mp4"`  // prefer H.264/AAC in MP4 so QuickTime etc. can play it
-	BrowserCookies string   `json:"browser_cookies"` // "" or a yt-dlp browser name
+	BrowserCookies string   `json:"browser_cookies"` // "", a yt-dlp browser name, or OwnBrowser
 	WatchClipboard bool     `json:"watch_clipboard"`
 	MaxConcurrent  int      `json:"max_concurrent"`
 	SupportedHosts []string `json:"supported_hosts"`
@@ -205,7 +205,7 @@ func normalize(s Settings) Settings {
 	if !contains(UpdateChannels, s.UpdateChannel) {
 		s.UpdateChannel = d.UpdateChannel
 	}
-	if s.BrowserCookies != "" && !contains(SupportedBrowsers, s.BrowserCookies) {
+	if s.BrowserCookies != "" && s.BrowserCookies != OwnBrowser && !contains(SupportedBrowsers, s.BrowserCookies) {
 		s.BrowserCookies = ""
 	}
 	if s.Language != "" && i18n.Match(s.Language) != s.Language {
@@ -229,7 +229,7 @@ func normalize(s Settings) Settings {
 }
 
 // IsSupportedURL reports whether text is an http(s) URL on one of the hosts
-// (or a subdomain of one, so "m.youtube.com" matches but "notyoutube.com" doesn't).
+// (or a subdomain of one, so "m.example.com" matches but "notexample.com" doesn't).
 func IsSupportedURL(text string, hosts []string) bool {
 	u, err := url.Parse(strings.TrimSpace(text))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {

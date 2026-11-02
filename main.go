@@ -44,7 +44,7 @@ func run() int {
 	linked := flag.Bool("linked", false, "CLI: check the videos a page's thumbnails link to (spyglass lists them, salvage downloads them)")
 	crowsNest := flag.Bool("crows-nest", false, "CLI: find photos by loading each page in a hidden browser, for pages built by scripts")
 	output := flag.String("output", "", "download folder (overrides settings for this run)")
-	browser := flag.String("browser", "", "use cookies from this browser for this run (chrome, firefox, safari, ...)")
+	browser := flag.String("browser", "", "use cookies from this browser for this run (chrome, firefox, safari, ..., or whydah for Whydah's sign-in browser)")
 	port := flag.Int("port", defaultPort, "UI port (falls back to a random port if busy)")
 	noBrowser := flag.Bool("no-browser", false, "don't open the UI in a browser")
 	showVersion := flag.Bool("version", false, "print version and exit")

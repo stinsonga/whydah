@@ -88,7 +88,7 @@ func TestVideoLinksFalsePositives(t *testing.T) {
 	<a href="/m/9"><img src="/t/9.jpg"><span class="playButton"></span></a>
 	<footer>
 	  <a href="https://www.youtube.com/@harbourchannel"><img src="/i/yt.svg"></a>
-	  <a href="https://twitter.com/harbour"><img src="/i/x.svg"><i class="icon-play"></i></a>
+	  <a href="https://social.example.com/harbour"><img src="/i/social.svg"><i class="icon-play"></i></a>
 	</footer>
 	</body></html>`
 	base, _ := url.Parse("https://example.com/")

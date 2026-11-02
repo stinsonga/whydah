@@ -171,7 +171,9 @@ func (e *Engine) worthRendering(ctx context.Context, md Metadata, err error) boo
 var errUnsupported = errors.New("unsupported site")
 
 func (e *Engine) inspectGalleryDL(ctx context.Context, paths tools.Paths, s config.Settings, url string) (Metadata, error) {
-	args := append(galleryArgs(s), "--resolve-json", "--range", "1-"+strconv.Itoa(inspectLimit), "--", url)
+	cookies, done := e.cookieFile(ctx, s)
+	defer done()
+	args := append(galleryArgs(s, cookies), "--resolve-json", "--range", "1-"+strconv.Itoa(inspectLimit), "--", url)
 	release := e.tools.Use()
 	cmd := tools.Command(ctx, paths.GalleryDL, args...)
 	var stderr strings.Builder
@@ -193,13 +195,9 @@ func (e *Engine) inspectGalleryDL(ctx context.Context, paths tools.Paths, s conf
 	return md, nil
 }
 
-// galleryArgs apply to both inspection and download.
-func galleryArgs(s config.Settings) []string {
-	var args []string
-	if s.BrowserCookies != "" {
-		args = append(args, "--cookies-from-browser", s.BrowserCookies)
-	}
-	return args
+// galleryArgs apply to both inspection and download; cookies is as for commonArgs.
+func galleryArgs(s config.Settings, cookies string) []string {
+	return cookieArgs(s, cookies)
 }
 
 // parseGalleryJSON reads gallery-dl's --resolve-json output: a list of
@@ -321,7 +319,9 @@ func (e *Engine) runGalleryDL(ctx context.Context, j *Job, paths tools.Paths, s 
 		return i18n.New("error.gallery_dl_missing")
 	}
 	dir := photoDir(s, j)
-	args := append(galleryArgs(s), "-D", dir)
+	cookies, done := e.cookieFile(ctx, s)
+	defer done()
+	args := append(galleryArgs(s, cookies), "-D", dir)
 	if !j.photos.all() {
 		args = append(args, "--range", rangeSpec(j.photos.Items))
 	}
@@ -384,7 +384,7 @@ func photoDir(s config.Settings, j *Job) string {
 	return filepath.Join(s.OutputDir, sanitizeDirName(j.Title))
 }
 
-// galleryErrorLine picks out lines like "[imgur][error] HttpError: ...".
+// galleryErrorLine picks out lines like "[example][error] HttpError: ...".
 func galleryErrorLine(line string) (string, bool) {
 	i := strings.Index(line, "][error] ")
 	if i < 0 {

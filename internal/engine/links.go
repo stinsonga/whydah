@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/url"
 	"path"
 	"regexp"
@@ -21,7 +22,9 @@ import (
 // Linked videos: listing pages show thumbnails that lead to a page with the
 // video. Scanning a page notes which thumbnail links look like that (cheap,
 // no requests); checking them runs yt-dlp on each linked page, only when
-// asked, and the ones with a video come back as a playlist to salvage.
+// asked, and the ones with a video come back as a playlist to salvage. A
+// page yt-dlp can't read (a site's own player) gets a look from the crow's
+// nest, which catches the stream the player loads.
 
 // LinkedVideo is a thumbnail link that looks like it leads to a video.
 type LinkedVideo struct {
@@ -49,7 +52,11 @@ type linkCand struct {
 	site  bool // in the page's header, nav or footer: logos, profiles, menus
 }
 
-const maxLinkedVideos = 200
+const (
+	maxLinkedVideos = 200
+	maxLinkedLooks  = 40 // linked pages the crow's nest looks at, after yt-dlp, a few seconds each
+	linkLookers     = 3  // looks at once, as tabs of the one browser
+)
 
 var (
 	durationRe = regexp.MustCompile(`\b(?:\d{1,2}:)?\d{1,2}:\d{2}\b`)
@@ -220,9 +227,10 @@ func (e *Engine) LinkedPlaylist(ctx context.Context, pageURL, title string, link
 		Entries: entries, Thumbnail: entries[0].Thumbnail}, nil
 }
 
-// CheckLinks runs yt-dlp on each linked page, a few at a time, and returns
-// the ones with a video as playlist entries in page order. Pages that don't
-// answer in time are left out.
+// CheckLinks runs yt-dlp on each linked page, a few at a time, then has
+// the crow's nest look at the ones it couldn't read, and returns the ones
+// with a video as playlist entries in page order. Pages that don't answer in
+// time are left out.
 func (e *Engine) CheckLinks(ctx context.Context, pageURL string, links []LinkedVideo) ([]Entry, error) {
 	paths, err := e.tools.Wait(ctx)
 	if err != nil {
@@ -232,7 +240,8 @@ func (e *Engine) CheckLinks(ctx context.Context, pageURL string, links []LinkedV
 	if len(links) > maxLinkedVideos {
 		links = links[:maxLinkedVideos]
 	}
-	const batch, workers = 6, 4 // several links per yt-dlp run saves its start-up time
+	const batch, workers = 6, 4     // several links per yt-dlp run saves its start-up time
+	looks := e.tools.BrowserReady() // not worth downloading a browser for, mid-check
 	found := make(map[string]Entry)
 	var mu sync.Mutex
 	done := 0
@@ -257,10 +266,12 @@ func (e *Engine) CheckLinks(ctx context.Context, pageURL string, links []LinkedV
 					publish()
 					mu.Unlock()
 				})
-				mu.Lock()
-				done += len(group) - answered // the ones that weren't videos
-				publish()
-				mu.Unlock()
+				if !looks {
+					mu.Lock()
+					done += len(group) - answered // the ones that weren't videos
+					publish()
+					mu.Unlock()
+				}
 			}
 		}()
 	}
@@ -274,6 +285,28 @@ feed:
 	}
 	close(jobs)
 	wg.Wait()
+	if looks && ctx.Err() == nil {
+		var missed []LinkedVideo
+		for _, l := range links {
+			if _, ok := found[l.URL]; !ok {
+				missed = append(missed, l)
+			}
+		}
+		if len(missed) > maxLinkedLooks {
+			done += len(missed) - maxLinkedLooks
+			missed = missed[:maxLinkedLooks]
+			publish()
+		}
+		e.lookAtLinks(ctx, paths, s, missed, func(l LinkedVideo, en *Entry) {
+			mu.Lock()
+			if en != nil {
+				found[l.URL] = *en
+			}
+			done++
+			publish()
+			mu.Unlock()
+		})
+	}
 	if ctx.Err() != nil && len(found) == 0 {
 		return nil, ctx.Err()
 	}
@@ -289,11 +322,55 @@ feed:
 	return out, nil
 }
 
+// lookAtLinks has the crow's nest look at linked pages, a few at a time,
+// passing each to seen with the stream its player loaded, or nil.
+func (e *Engine) lookAtLinks(ctx context.Context, paths tools.Paths, s config.Settings, links []LinkedVideo, seen func(LinkedVideo, *Entry)) {
+	next := make(chan LinkedVideo)
+	var wg sync.WaitGroup
+	for range linkLookers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for l := range next {
+				seen(l, e.streamEntry(ctx, paths, s, l.URL))
+			}
+		}()
+	}
+feed:
+	for _, l := range links {
+		select {
+		case next <- l:
+		case <-ctx.Done():
+			break feed
+		}
+	}
+	close(next)
+	wg.Wait()
+}
+
+// streamEntry is the first stream the crow's nest sees page play, as a
+// playlist entry, or nil if it sees none.
+func (e *Engine) streamEntry(ctx context.Context, paths tools.Paths, s config.Settings, page string) *Entry {
+	md, err := e.renderStreams(ctx, paths, s, page)
+	if err != nil || len(md.Streams) == 0 {
+		if err != nil && ctx.Err() == nil {
+			slog.Info("linked page look failed", "url", page, "err", err)
+		}
+		return nil
+	}
+	st := md.Streams[0]
+	return &Entry{URL: st.URL, Title: firstNonEmpty(st.Title, md.Title), Duration: st.Duration,
+		DurationString: st.DurationString, Thumbnail: firstNonEmpty(st.Thumbnail, md.Thumbnail),
+		StreamFrom: StreamFrom{Referer: st.Referer, Origin: st.Origin, Page: page}}
+}
+
 // checkBatch asks one yt-dlp run about a few links, passing each video to found as it's reported.
 func (e *Engine) checkBatch(ctx context.Context, paths tools.Paths, s config.Settings, links []LinkedVideo, found func(Entry)) {
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	args := append(commonArgs(paths, s), "-j", "--no-playlist", "--flat-playlist", "--ignore-errors", "--socket-timeout", "15", "--")
+	cookies, done := e.cookieFile(ctx, s)
+	defer done()
+	args := append(commonArgs(paths, s, cookies), "-j", "--no-playlist", "--flat-playlist", "--ignore-errors", "--socket-timeout", "15", "--")
 	for _, l := range links {
 		args = append(args, l.URL)
 	}

@@ -86,6 +86,54 @@ func parseCookies(r io.Reader, site string) cookieJar {
 	return jar
 }
 
+// fromCDP converts cookies read from a browser over CDP.
+func fromCDP(list []cdpCookie) cookieJar {
+	jar := make(cookieJar, 0, len(list))
+	for _, c := range list {
+		var exp int64
+		if c.Expires > 0 {
+			exp = int64(c.Expires)
+		}
+		jar = append(jar, cookie{
+			Domain: strings.TrimPrefix(strings.ToLower(c.Domain), "."), Sub: strings.HasPrefix(c.Domain, "."),
+			Path: firstNonEmpty(c.Path, "/"), Secure: c.Secure, HTTPOnly: c.HTTPOnly, Expires: exp, Name: c.Name, Value: c.Value,
+		})
+	}
+	return jar
+}
+
+// forSite keeps the cookies for site and its subdomains.
+func (jar cookieJar) forSite(site string) cookieJar {
+	var out cookieJar
+	for _, c := range jar {
+		if domainMatch(c.Domain, site) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// write saves jar as a Netscape cookies.txt, which yt-dlp and gallery-dl read.
+func (jar cookieJar) write(w io.Writer) error {
+	bw := bufio.NewWriter(w)
+	bw.WriteString("# Netscape HTTP Cookie File\n")
+	flag := map[bool]string{true: "TRUE", false: "FALSE"}
+	for _, c := range jar {
+		if strings.ContainsAny(c.Name+c.Value+c.Domain+c.Path, "\t\r\n") {
+			continue
+		}
+		domain := c.Domain
+		if c.Sub {
+			domain = "." + domain
+		}
+		if c.HTTPOnly {
+			domain = "#HttpOnly_" + domain
+		}
+		bw.WriteString(strings.Join([]string{domain, flag[c.Sub], c.Path, flag[c.Secure], strconv.FormatInt(c.Expires, 10), c.Name, c.Value}, "\t") + "\n")
+	}
+	return bw.Flush()
+}
+
 // header is the Cookie header a browser would send to u, or "".
 func (jar cookieJar) header(u *url.URL) string {
 	host := strings.ToLower(u.Hostname())

@@ -76,12 +76,12 @@ func TestRangeSpec(t *testing.T) {
 
 func TestParseGalleryJSON(t *testing.T) {
 	out := `[
-	  [2, {"category": "imgur", "album": {"title": "Harbour"}, "user": {"username": "sam"}}],
-	  [3, "https://i.imgur.com/a.jpg", {"filename": "a", "extension": "jpg", "width": 951, "height": 1400}],
+	  [2, {"category": "example", "album": {"title": "Harbour"}, "user": {"username": "sam"}}],
+	  [3, "https://i.example.com/a.jpg", {"filename": "a", "extension": "jpg", "width": 951, "height": 1400}],
 	  [6, "https://example.com/queued", {}],
 	  [3, "https://example.com/icon.svg", {"filename": "icon", "extension": "svg", "width": 20, "height": 20}],
-	  [3, "https://i.imgur.com/a.jpg", {"filename": "a", "extension": "jpg"}],
-	  [3, "https://i.imgur.com/b.mp4", {"filename": "b", "extension": "mp4"}]
+	  [3, "https://i.example.com/a.jpg", {"filename": "a", "extension": "jpg"}],
+	  [3, "https://i.example.com/b.mp4", {"filename": "b", "extension": "mp4"}]
 	]`
 	md, err := parseGalleryJSON([]byte(out))
 	if err != nil {
@@ -91,13 +91,13 @@ func TestParseGalleryJSON(t *testing.T) {
 		t.Errorf("metadata = %+v", md)
 	}
 	want := []Photo{
-		{Index: 1, URL: "https://i.imgur.com/a.jpg", Name: "a.jpg", Width: 951, Height: 1400},
-		{Index: 4, URL: "https://i.imgur.com/b.mp4", Name: "b.mp4", Video: true}, // icon and duplicate skipped, numbering kept
+		{Index: 1, URL: "https://i.example.com/a.jpg", Name: "a.jpg", Width: 951, Height: 1400},
+		{Index: 4, URL: "https://i.example.com/b.mp4", Name: "b.mp4", Video: true}, // icon and duplicate skipped, numbering kept
 	}
 	if !reflect.DeepEqual(md.Photos, want) {
 		t.Errorf("photos = %+v", md.Photos)
 	}
-	if md.Thumbnail != "https://i.imgur.com/a.jpg" {
+	if md.Thumbnail != "https://i.example.com/a.jpg" {
 		t.Errorf("thumbnail = %q", md.Thumbnail)
 	}
 
@@ -113,8 +113,8 @@ func TestGalleryTitle(t *testing.T) {
 		title, owner string
 	}{
 		{map[string]any{"category": "wikimediacommons", "page": "Category:Lighthouses_in_Maine", "title": "File:x.jpg"}, "Category:Lighthouses in Maine", ""},
-		{map[string]any{"category": "reddit", "title": "My cat", "author": "someone"}, "My cat", "someone"},
-		{map[string]any{"category": "instagram", "username": "natgeo"}, "Instagram – natgeo", "natgeo"},
+		{map[string]any{"category": "forum", "title": "My cat", "author": "someone"}, "My cat", "someone"},
+		{map[string]any{"category": "example", "username": "harbourpics"}, "Example – harbourpics", "harbourpics"},
 		{map[string]any{}, "Photos", ""},
 	}
 	for _, c := range cases {

@@ -22,6 +22,15 @@ type Entry struct {
 	Duration       float64 `json:"duration"`
 	DurationString string  `json:"duration_string"`
 	Thumbnail      string  `json:"thumbnail"`
+	StreamFrom
+}
+
+// StreamFrom is set on an entry that's a stream the crow's nest caught on a
+// linked page, rather than a page yt-dlp reads: see Job.Referer.
+type StreamFrom struct {
+	Referer string `json:"referer,omitempty"`
+	Origin  string `json:"origin,omitempty"`
+	Page    string `json:"page,omitempty"`
 }
 
 // Item is a playlist entry chosen for download.
@@ -30,6 +39,7 @@ type Item struct {
 	URL       string `json:"url"`
 	Title     string `json:"title"`
 	Thumbnail string `json:"thumbnail"`
+	StreamFrom
 }
 
 // ytInfo is the subset of yt-dlp's -J output we use, for videos, playlists
@@ -88,8 +98,8 @@ func playlistEntries(raw []ytInfo) []Entry {
 	return out
 }
 
-// titleFromURL is a placeholder title for entries listed without one (e.g.
-// SoundCloud sets); the real title replaces it once the item downloads.
+// titleFromURL is a placeholder title for entries listed without one (some
+// sites' sets); the real title replaces it once the item downloads.
 func titleFromURL(link string, index int) string {
 	u, err := url.Parse(link)
 	if err != nil {
@@ -102,9 +112,9 @@ func titleFromURL(link string, index int) string {
 	return strings.NewReplacer("-", " ", "_", " ").Replace(slug)
 }
 
-// youtubePlaylistURL returns the playlist a YouTube watch link was opened
-// from (its &list= parameter), or "".
-func youtubePlaylistURL(raw string) string {
+// watchPlaylistURL returns the playlist a watch link was opened from (its
+// &list= parameter), or "", on the site whose links work that way.
+func watchPlaylistURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return ""
@@ -143,6 +153,9 @@ func (e *Engine) DownloadPlaylist(title string, total int, audio bool, items []I
 			Audio:      audio,
 			Title:      it.Title,
 			Thumbnail:  it.Thumbnail,
+			Referer:    it.Referer,
+			Origin:     it.Origin,
+			Page:       it.Page,
 			group:      group,
 			groupTitle: title,
 			index:      it.Index,

@@ -122,6 +122,22 @@ func (m *Manager) headlessVersion() string {
 // the user's own browser.
 const BrowserProfilePrefix = "whydah-browser-"
 
+// SignInProfileName is the folder, in the app folder, of the browser profile
+// people sign in to sites with (see engine/signin.go). It's kept.
+const SignInProfileName = "whydah-sign-in-profile"
+
+// VisibleBrowser is the installed browser the sign-in window opens in, or ""
+// if there's none: chrome-headless-shell can't show a window.
+func (m *Manager) VisibleBrowser() string { return installedBrowser() }
+
+// VisibleBrowserName is how VisibleBrowser is written, or "" if there's none.
+func (m *Manager) VisibleBrowserName() string {
+	if p := installedBrowser(); p != "" {
+		return browserName(p)
+	}
+	return ""
+}
+
 // BrowserReady reports whether a browser can be used without a download.
 func (m *Manager) BrowserReady() bool {
 	return installedBrowser() != "" || m.managedHeadless() != ""

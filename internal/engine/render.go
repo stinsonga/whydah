@@ -22,6 +22,7 @@ import (
 
 const (
 	renderTimeout = 90 * time.Second // the whole look, including starting the browser
+	streamTimeout = 45 * time.Second // a streams-only look at a linked page
 	scrollBudget  = 12 * time.Second // endless feeds stop here
 	maxScrolls    = 30
 )
@@ -229,15 +230,28 @@ func (w *pageWatch) waitLoaded(ctx context.Context, limit time.Duration) {
 
 // renderPhotos is the crow's nest for pageURL.
 func (e *Engine) renderPhotos(ctx context.Context, paths tools.Paths, s config.Settings, pageURL string) (Metadata, error) {
-	ctx, cancel := context.WithTimeout(ctx, renderTimeout)
+	return e.render(ctx, paths, s, pageURL, false)
+}
+
+// renderStreams is a shorter look at pageURL for its streams alone, for a
+// linked page yt-dlp can't read: no scrolling, and no photos.
+func (e *Engine) renderStreams(ctx context.Context, paths tools.Paths, s config.Settings, pageURL string) (Metadata, error) {
+	return e.render(ctx, paths, s, pageURL, true)
+}
+
+func (e *Engine) render(ctx context.Context, paths tools.Paths, s config.Settings, pageURL string, streamsOnly bool) (Metadata, error) {
+	ctx, cancel := context.WithTimeout(ctx, map[bool]time.Duration{false: renderTimeout, true: streamTimeout}[streamsOnly])
 	defer cancel()
-	browser, err := e.tools.Browser(ctx)
-	if err != nil {
+	var browser, profile string
+	var err error
+	if e.usesSignIn(s) { // the page sees what the sign-in window saw
+		browser, profile = e.tools.VisibleBrowser(), signInProfile()
+	} else if browser, err = e.tools.Browser(ctx); err != nil {
 		return Metadata{}, err
 	}
 	var jar cookieJar
-	if s.BrowserCookies != "" {
-		if jar, err = siteCookies(ctx, paths.YtDlp, s.BrowserCookies, pageURL); err != nil {
+	if profile == "" {
+		if jar, err = e.siteJar(ctx, paths, s, pageURL); err != nil {
 			slog.Warn("couldn't read browser cookies", "browser", s.BrowserCookies, "err", err)
 		}
 	}
@@ -246,10 +260,13 @@ func (e *Engine) renderPhotos(ctx context.Context, paths tools.Paths, s config.S
 
 	start := time.Now()
 	w := newPageWatch()
-	h, session, closeTab, err := e.browsers.tab(ctx, browser, w) // events before the page's session is known are ignored
+	h, session, closeTab, err := e.browsers.tab(ctx, browser, profile, w) // events before the page's session is known are ignored
 	if err != nil {
 		if ctx.Err() != nil {
 			return Metadata{}, ctx.Err()
+		}
+		if ie, ok := err.(*i18n.Error); ok {
+			return Metadata{}, ie
 		}
 		return Metadata{}, i18n.New("error.browser_start").WithDetail(err.Error())
 	}
@@ -327,7 +344,10 @@ func (e *Engine) renderPhotos(ctx context.Context, paths tools.Paths, s config.S
 
 	scrollStart, atBottom, failures, scrolls := time.Now(), 0, 0, 0
 	stop := "budget"
-	for ; scrolls < maxScrolls && time.Since(scrollStart) < scrollBudget && ctx.Err() == nil; scrolls++ {
+	if streamsOnly {
+		stop = "streams only"
+	}
+	for ; !streamsOnly && scrolls < maxScrolls && time.Since(scrollStart) < scrollBudget && ctx.Err() == nil; scrolls++ {
 		var pos struct{ Y, Height, View float64 }
 		if err := h.eval(ctx, session, scrollJS, &pos); err != nil {
 			// e.g. the page replaced itself (a redirect or a bot check passing)
@@ -367,6 +387,12 @@ func (e *Engine) renderPhotos(ctx context.Context, paths tools.Paths, s config.S
 	frames := len(w.frames)
 	w.mu.Unlock()
 	closeTab() // done with the browser; probing doesn't need it
+	// The photos are fetched with the cookies the page had.
+	if profile != "" && !streamsOnly {
+		if jar, err = e.siteJar(ctx, paths, s, pageURL); err != nil {
+			slog.Warn("couldn't read the sign-in browser's cookies", "err", err)
+		}
+	}
 
 	base, err := url.Parse(page.URL)
 	if err != nil || base.Scheme == "" {
@@ -385,14 +411,16 @@ func (e *Engine) renderPhotos(ctx context.Context, paths tools.Paths, s config.S
 		thumb := firstNonEmpty(poster, scan.og)
 		checked <- e.checkStreams(ctx, paths, s, md.Title, thumb, streams)
 	}()
-	md.Photos = probePhotos(ctx, pageURL, jar, cands)
+	if !streamsOnly {
+		md.Photos = probePhotos(ctx, pageURL, jar, cands)
+	}
 	md.Streams = <-checked
 	if len(md.Photos) > 0 {
 		md.Thumbnail = firstNonEmpty(md.Photos[0].Thumb, md.Photos[0].URL)
 	} else if len(md.Streams) > 0 {
 		md.Thumbnail = md.Streams[0].Thumbnail
 	}
-	slog.Info("crow's nest", "url", pageURL, "browser", browser, "candidates", len(cands), "photos", len(md.Photos),
+	slog.Info("crow's nest", "url", pageURL, "browser", browser, "signed in", profile != "", "candidates", len(cands), "photos", len(md.Photos),
 		"links", len(md.Links), "streams seen", len(streams), "streams", len(md.Streams), "players", played, "iframes", frames,
 		"cookies", len(jar), "loaded", loadedAt.Round(100*time.Millisecond), "settled", settledAt.Round(100*time.Millisecond),
 		"scrolled", scrolledAt.Round(100*time.Millisecond), "scrolls", scrolls, "stop", stop, "took", time.Since(start).Round(100*time.Millisecond))

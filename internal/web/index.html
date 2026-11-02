@@ -184,6 +184,15 @@
     <div class="field">
       <label for="s-browser">Use cookies from browser (for age-restricted, members-only or private posts)</label>
       <select id="s-browser"></select>
+      <div id="s-signin" hidden>
+        <div class="example" id="s-signin-hint"></div>
+        <div class="actions" style="margin-top: 6px">
+          <button type="button" id="s-signin-open" data-t="ui.signin">Sign in to sites…</button>
+          <button type="button" class="link" id="s-signout" data-t="ui.signout">Sign out of everything</button>
+        </div>
+        <div class="example" id="s-signin-status"></div>
+        <div class="error-text" id="s-signin-error"></div>
+      </div>
     </div>
     <div class="field"><label for="s-conc">Simultaneous downloads</label><input id="s-conc" type="number" min="1" max="8"></div>
     <label class="check"><input type="checkbox" id="s-clip"> Watch clipboard for links</label>
@@ -324,9 +333,19 @@ function lightbox(items, start) {
 // enlarge opens the lightbox from a click inside a <label> without ticking its checkbox.
 const enlarge = (items, i) => (ev) => { ev.preventDefault(); ev.stopPropagation(); lightbox(items, i); };
 
-function thumb(src) {
+// imgSrc is how this page loads an image found on page: through Whydah
+// when the sign-in browser is the cookie source, since this browser isn't
+// signed in to the site; directly otherwise.
+function imgSrc(src, page) {
+  const si = state.signin || {};
+  if (!src || !page || !/^https?:/.test(src) || state.settings.browser_cookies !== "whydah" || !si.profile) return src;
+  return `/api/image?t=${encodeURIComponent(token)}&u=${encodeURIComponent(src)}&page=${encodeURIComponent(page)}`;
+}
+
+// thumb shows src, an image found on page (if known; see imgSrc).
+function thumb(src, page) {
   const img = el("img", { class: "thumb", alt: "", loading: "lazy", referrerpolicy: "no-referrer" });
-  if (src) img.src = src;
+  if (src) img.src = imgSrc(src, page);
   img.addEventListener("error", () => img.removeAttribute("src"));
   return img;
 }
@@ -567,7 +586,7 @@ function streamsCard(key, p) {
 async function startPlaylist(key, audio) {
   const p = state.previews.get(key), md = p.md;
   const items = md.entries.filter((e) => p.selected.has(e.index))
-    .map((e) => ({ index: e.index, url: e.url, title: e.title, thumbnail: e.thumbnail }));
+    .map((e) => ({ index: e.index, url: e.url, title: e.title, thumbnail: e.thumbnail, referer: e.referer, origin: e.origin, page: e.page }));
   if (!items.length) return;
   dismiss(key);
   try {
@@ -608,7 +627,7 @@ function previewCard(key, p) {
   }
   if (p.status === "error") {
     return el("div", { class: "card" },
-      el("div", { class: "meta" }, url), problemView(p.problem, p.error), updateHint(p.problem),
+      el("div", { class: "meta" }, url), problemView(p.problem, p.error), signInHint(p.problem, url), updateHint(p.problem),
       el("div", { class: "actions" },
         el("button", { type: "button", onclick: () => { dismiss(key); p.mode === "links" ? checkLinks(url, { links: p.links, title: p.title }) : inspect(url, p.mode); } }, t("ui.retry")),
         p.photos ? null : el("button", { type: "button", onclick: () => { dismiss(key); inspect(url, "photos"); }, title: "Look for photos on this page instead" }, "Photos on this page…"),
@@ -665,10 +684,10 @@ function playlistCard(key, p) {
   };
   // Thumbnails, when the playlist has them, open large on click.
   const withThumbs = md.entries.filter((e) => e.thumbnail);
-  const big = withThumbs.map((e) => ({ src: e.thumbnail, title: e.title, detail: e.duration ? e.duration_string : "" }));
+  const big = withThumbs.map((e) => ({ src: imgSrc(e.thumbnail, e.page || md.url), title: e.title, detail: e.duration ? e.duration_string : "" }));
   const rowThumb = (e) => {
     if (!e.thumbnail) return el("span", { class: "row-thumb" });
-    const img = el("img", { class: "row-thumb", alt: "", loading: "lazy", referrerpolicy: "no-referrer", src: e.thumbnail,
+    const img = el("img", { class: "row-thumb", alt: "", loading: "lazy", referrerpolicy: "no-referrer", src: imgSrc(e.thumbnail, e.page || md.url),
       title: "Enlarge", onclick: enlarge(big, withThumbs.indexOf(e)) });
     img.addEventListener("error", () => img.replaceWith(el("span", { class: "row-thumb" })));
     return img;
@@ -701,7 +720,7 @@ function playlistCard(key, p) {
 
 // The photo picker is a grid of tiles; images load lazily as it scrolls.
 function photosCard(key, p) {
-  const md = p.md, n = md.photos.length;
+  const md = p.md, n = md.photos.length, page = md.url || p.url;
   const saveBtn = el("button", { class: "primary", type: "button", onclick: () => startPhotos(key) });
   const chooseBtn = el("button", { class: "link", type: "button" });
   const tiles = [];
@@ -719,12 +738,12 @@ function photosCard(key, p) {
   };
   const setAll = (on) => { md.photos.forEach((ph, i) => setOne(ph, tiles[i], on)); refresh(); };
   const stills = md.photos.filter((ph) => !ph.video);
-  const big = stills.map((ph) => ({ src: ph.url, title: ph.name || `Photo ${ph.index}`, detail: ph.width ? `${ph.width}×${ph.height}` : "" }));
+  const big = stills.map((ph) => ({ src: imgSrc(ph.url, page), title: ph.name || `Photo ${ph.index}`, detail: ph.width ? `${ph.width}×${ph.height}` : "" }));
   const grid = el("div", { class: "photo-grid" }, md.photos.map((ph) => {
     const cb = el("input", { type: "checkbox", checked: p.selected.has(ph.index), "aria-label": ph.name || `Photo ${ph.index}` });
     const caption = [ph.index, ph.width ? `${ph.width}×${ph.height}` : ""].filter(Boolean).join(" · ");
     const tile = el("label", { class: "tile" + (p.selected.has(ph.index) ? " on" : ""), title: ph.name || ph.url },
-      ph.video ? el("span", { class: "video" }, "▶ video") : thumb(ph.thumb || ph.url), cb,
+      ph.video ? el("span", { class: "video" }, "▶ video") : thumb(ph.thumb || ph.url, page), cb,
       ph.video ? null : el("button", { class: "zoom", type: "button", "aria-label": "Enlarge", title: "Enlarge", onclick: enlarge(big, stills.indexOf(ph)) }, "⤢"),
       el("span", { class: "cap" }, caption));
     cb.addEventListener("change", () => { setOne(ph, tile, cb.checked); refresh(); });
@@ -741,7 +760,7 @@ function photosCard(key, p) {
   const found = md.truncated ? `more than ${n} photos` : plural(n, "photo");
   const via = { page: "found on the page", browser: "from the crow's nest", "gallery-dl": "via gallery-dl" }[md.source];
   const meta = [md.uploader, found, via].filter(Boolean).join(" · ");
-  return el("div", { class: "card preview" }, thumb(md.thumbnail),
+  return el("div", { class: "card preview" }, thumb(md.thumbnail, page),
     el("div", {},
       el("div", { class: "title" }, md.title || p.url),
       el("div", { class: "meta" }, "Photos · ", meta),
@@ -820,12 +839,13 @@ function jobCard(j) {
   const unknownTotal = j.kind === "photos" && !j.file_total;
   const badgeText = { queued: "Queued", downloading: unknownTotal ? "Salvaging" : `${Math.floor(j.percent)}%`, processing: "Processing", done: "Done", error: "Failed", canceled: "Canceled" }[j.state];
   const tag = j.audio ? "  · audio" : j.kind === "photos" ? "  · photos" : "";
-  return el("div", { class: "card job" }, thumb(j.thumbnail),
+  return el("div", { class: "card job" }, thumb(j.thumbnail, j.kind === "photos" ? j.url : j.page),
     el("div", { style: "min-width:0" },
       el("div", { class: "title" }, j.title, tag ? el("span", { class: "meta" }, tag) : null),
       (isActive(j) || j.state === "done") ? progressBar(unknownTotal && j.state === "downloading" ? "processing" : j.state, j.percent) : null,
       el("div", { class: "meta" }, el("span", { class: `badge ${j.state}` }, badgeText), "  ", jobLine(j)),
       j.state === "error" ? problemView(j.problem, j.error) : null,
+      j.state === "error" ? signInHint(j.problem, j.page || j.url) : null,
       j.state === "error" ? updateHint(j.problem) : null),
     el("div", { class: "job-actions actions" }, jobActions(j)));
 }
@@ -861,8 +881,9 @@ function groupCard(id, jobs) {
   const toggle = () => { expanded ? state.expandedGroups.delete(id) : state.expandedGroups.add(id); renderJobs(); };
   const firstDone = jobs.find((j) => j.state === "done" && j.file_path);
   const b = (label, onclick, cls) => el("button", { type: "button", class: cls, onclick }, label);
+  const pic = jobs.find((j) => j.thumbnail) || first;
 
-  return el("div", { class: "card job" }, thumb((jobs.find((j) => j.thumbnail) || first).thumbnail),
+  return el("div", { class: "card job" }, thumb(pic.thumbnail, pic.page),
     el("div", { style: "min-width:0" },
       el("div", { class: "title" }, first.group_title, el("span", { class: "meta" }, `  · ${plural(n, "item")}${first.audio ? " · audio" : ""}`)),
       // Finished with errors: show how much actually completed.
@@ -918,10 +939,12 @@ function openSettings() {
   $("s-compat").checked = s.compatible_mp4;
   fillSelect($("s-audio"), meta.audio_formats, s.audio_format);
   const detected = new Set(meta.browsers);
-  const browsers = ["", ...meta.supported_browsers.filter((b) => detected.has(b)), ...meta.supported_browsers.filter((b) => !detected.has(b))];
-  const labels = { "": "Don't use cookies" };
+  const browsers = ["", ...meta.supported_browsers.filter((b) => detected.has(b)), "whydah", ...meta.supported_browsers.filter((b) => !detected.has(b))];
+  const labels = { "": "Don't use cookies", whydah: t("ui.cookies_own") };
   for (const b of meta.supported_browsers) labels[b] = b[0].toUpperCase() + b.slice(1) + (detected.has(b) ? "" : " (not detected)");
   fillSelect($("s-browser"), browsers, s.browser_cookies, labels);
+  $("s-signin-error").textContent = "";
+  renderSignIn();
   $("s-conc").value = s.max_concurrent;
   $("s-clip").checked = s.watch_clipboard;
   $("s-hosts").value = s.supported_hosts.join(", ");
@@ -963,8 +986,49 @@ async function saveSettings(ev) {
   } catch (e) { $("s-error").textContent = e.problem ? problemText(e.problem) : e.message; }
 }
 
+// ---- sign-in browser ----
+// Whydah's own browser profile, for sites that don't keep you signed in with
+// borrowed cookies. Its controls show when it's the cookie source chosen.
+function renderSignIn() {
+  const si = state.signin || {};
+  $("s-signin").hidden = $("s-browser").value !== "whydah";
+  $("s-signin-hint").textContent = si.browser ? t("ui.signin_hint", { browser: si.browser }) : t("error.signin_no_browser");
+  $("s-signin-open").disabled = !si.browser;
+  $("s-signout").disabled = !si.profile || si.open;
+  $("s-signin-status").textContent = si.open ? t("ui.signin_open") : "";
+}
+
+function signInFailed(e) {
+  const msg = e.problem ? problemText(e.problem) : e.message;
+  if ($("settings").open) $("s-signin-error").textContent = msg;
+  else alert(msg);
+}
+
+// signIn opens the sign-in window, at url if given.
+async function signIn(url = "") {
+  $("s-signin-error").textContent = "";
+  try { state.signin = await api("/api/signin", { method: "POST", body: { url } }); renderSignIn(); }
+  catch (e) { signInFailed(e); }
+}
+
+async function signOut() {
+  if (!confirm(t("ui.signout_confirm"))) return;
+  $("s-signin-error").textContent = "";
+  try { state.signin = await api("/api/signout", { method: "POST" }); renderSignIn(); }
+  catch (e) { signInFailed(e); }
+}
+
+// signInHint offers to sign in to a failed page's site, when the sign-in
+// browser's cookies are the ones used.
+const signInHints = new Set(["hint.cookies_own", "hint.forbidden_own"]);
+function signInHint(problem, url) {
+  if (!problem || !signInHints.has(problem.hint) || !url) return null;
+  return el("div", { class: "actions" },
+    el("button", { type: "button", onclick: () => signIn(url) }, t("ui.signin_site", { site: (problem.args || {}).site || url })));
+}
+
 // showNameExample shows what the file name template makes of an example video.
-const nameSample = { title: "Harbour Lights", uploader: "Sea Films", date: "2026-10-25", site: "vimeo.com", id: "48213" };
+const nameSample = { title: "Harbour Lights", uploader: "Sea Films", date: "2026-10-25", site: "example.com", id: "48213" };
 function showNameExample() {
   const tmpl = $("s-names").value.trim() || "{title}";
   const name = tmpl.replace(/\{(\w+)\}/g, (m, k) => nameSample[k] ?? m) + ".mp4";
@@ -1020,7 +1084,7 @@ function renderClipHint() {
 // ---- wiring ----
 async function loadState() {
   const s = await api("/api/state");
-  meta = s; state.settings = s.settings; state.tools = s.tools;
+  meta = s; state.settings = s.settings; state.tools = s.tools; state.signin = s.signin;
   state.jobs = new Map(s.jobs.map((j) => [j.id, j]));
   renderTools(); renderJobs(); renderClipHint();
 }
@@ -1041,12 +1105,16 @@ function connect() {
     }
     else if (ev.type === "url_detected") inspect(ev.data.url);
     else if (ev.type === "links_progress") linksProgress(ev.data);
+    else if (ev.type === "signin_status") { state.signin = ev.data; renderSignIn(); }
   };
 }
 
 $("url-form").addEventListener("submit", (ev) => { ev.preventDefault(); inspect($("url-input").value); $("url-input").value = ""; });
 $("open-settings").addEventListener("click", () => state.settings && openSettings());
 $("s-names").addEventListener("input", showNameExample);
+$("s-browser").addEventListener("change", renderSignIn);
+$("s-signin-open").addEventListener("click", () => signIn());
+$("s-signout").addEventListener("click", signOut);
 $("s-bookmarklet").addEventListener("click", (ev) => { ev.preventDefault(); alert(t("ui.bookmarklet_hint")); });
 $("open-history").addEventListener("click", () => {
   $("history-q").placeholder = t("ui.history_search");

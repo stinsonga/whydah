@@ -31,3 +31,11 @@ func TestCheckNameTemplate(t *testing.T) {
 		t.Errorf("an invalid template was kept: %q", s.NameTemplate)
 	}
 }
+
+func TestNormalizeCookieSource(t *testing.T) {
+	for in, want := range map[string]string{"firefox": "firefox", OwnBrowser: OwnBrowser, "netscape": ""} {
+		if got := normalize(Settings{BrowserCookies: in}).BrowserCookies; got != want {
+			t.Errorf("cookies from %q normalized to %q, want %q", in, got, want)
+		}
+	}
+}

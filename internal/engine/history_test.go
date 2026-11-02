@@ -24,9 +24,9 @@ func TestHistory(t *testing.T) {
 	}
 
 	e := newEngine()
-	e.history.add(Job{URL: "https://vimeo.com/48213", Title: "Harbour Lights", FilePath: saved})
+	e.history.add(Job{URL: "https://video.example.org/48213", Title: "Harbour Lights", FilePath: saved})
 	e.history.add(Job{URL: "https://cdn.example.com/master.m3u8", Page: "https://films.example.com/storm", Title: "Storm at Sea", FilePath: filepath.Join(dir, "gone.mp4")})
-	e.history.add(Job{URL: "https://youtube.com/watch?v=1", Title: "Track One", GroupTitle: "Sea Shanties", Audio: true, FilePath: filepath.Join(dir, "01 - Track One.mp3")})
+	e.history.add(Job{URL: "https://music.example.net/watch?v=1", Title: "Track One", GroupTitle: "Sea Shanties", Audio: true, FilePath: filepath.Join(dir, "01 - Track One.mp3")})
 
 	// Reloaded from the file, newest first; searched by every word.
 	e = newEngine()
@@ -38,10 +38,10 @@ func TestHistory(t *testing.T) {
 		t.Errorf("exists: %v %v, want true false", all[2].Exists, all[1].Exists)
 	}
 	for q, want := range map[string]string{
-		"harbour":        "Harbour Lights",
-		"films.example":  "Storm at Sea", // the page a stream was found on
-		"shanties track": "Track One",    // the playlist, and every word
-		"vimeo 48213":    "Harbour Lights",
+		"harbour":           "Harbour Lights",
+		"films.example":     "Storm at Sea", // the page a stream was found on
+		"shanties track":    "Track One",    // the playlist, and every word
+		"example.org 48213": "Harbour Lights",
 	} {
 		got, n := e.History(q, 10)
 		if n != 1 || got[0].Title != want {

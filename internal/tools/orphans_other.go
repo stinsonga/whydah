@@ -21,8 +21,9 @@ import (
 // a headless browser) lives on, and a resumed job could race it for its files.
 // One is recognised as a process group leader (Command starts each helper
 // in its own group) whose parent is gone and that runs one of our helpers,
-// or a browser with the crow's nest's throwaway profile: the browser's own
-// path won't do, since the user's browser looks the same from here.
+// or a browser with the crow's nest's throwaway profile or the sign-in
+// profile: the browser's own path won't do, since the user's browser looks
+// the same from here.
 func reapOrphans(ctx context.Context, helpers []string) {
 	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=,pgid=,command=").Output()
 	if err != nil {
@@ -65,7 +66,8 @@ func removeProfile(dir string) {
 }
 
 func ours(cmd string, helpers []string) bool {
-	if strings.Contains(cmd, "--user-data-dir=") && strings.Contains(cmd, string(filepath.Separator)+BrowserProfilePrefix) {
+	if strings.Contains(cmd, "--user-data-dir=") && (strings.Contains(cmd, string(filepath.Separator)+BrowserProfilePrefix) ||
+		strings.Contains(cmd, string(filepath.Separator)+SignInProfileName)) {
 		return true
 	}
 	for _, h := range helpers {

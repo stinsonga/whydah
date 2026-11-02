@@ -561,7 +561,7 @@ func (e *Engine) runPagePhotos(ctx context.Context, j *Job, paths tools.Paths, s
 	var jar cookieJar
 	if j.photos.Source == "browser" && s.BrowserCookies != "" {
 		var err error
-		if jar, err = siteCookies(ctx, paths.YtDlp, s.BrowserCookies, j.URL); err != nil {
+		if jar, err = e.siteJar(ctx, paths, s, j.URL); err != nil {
 			slog.Warn("couldn't read browser cookies", "browser", s.BrowserCookies, "err", err)
 		}
 	}

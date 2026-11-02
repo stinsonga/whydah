@@ -103,7 +103,7 @@ type Metadata struct {
 
 	Kind        string  `json:"kind"`         // "video", "playlist", "photos", "streams" (only those) or "links" (linked videos only)
 	Entries     []Entry `json:"entries"`      // playlist items, in order
-	PlaylistURL string  `json:"playlist_url"` // for a video opened from a playlist (YouTube &list=)
+	PlaylistURL string  `json:"playlist_url"` // for a video opened from a playlist (a watch link with &list=)
 
 	Photos    []Photo `json:"photos"`    // for "photos", in order
 	Source    string  `json:"source"`    // for "photos": "gallery-dl", "page" or "browser"; "links" for a playlist of linked videos
@@ -130,8 +130,9 @@ type Engine struct {
 	jobs    map[string]*Job
 	cancels map[string]context.CancelFunc
 
-	browsers browserPool // the crow's nest's browser
-	history  history
+	browsers      browserPool // the crow's nest's browser, and the sign-in window's
+	signInCookies signInCookies
+	history       history
 
 	// The saved queue (see queue.go); queuePath is "" when it isn't kept.
 	queuePath string
@@ -210,7 +211,9 @@ func (e *Engine) inspect(ctx context.Context, url string, opt InspectOptions) (M
 }
 
 func (e *Engine) inspectVideo(ctx context.Context, paths tools.Paths, s config.Settings, url string) (Metadata, error) {
-	args := append(commonArgs(paths, s), "-J", "--no-playlist", "--flat-playlist", url)
+	cookies, done := e.cookieFile(ctx, s)
+	defer done()
+	args := append(commonArgs(paths, s, cookies), "-J", "--no-playlist", "--flat-playlist", url)
 	release := e.tools.Use()
 	cmd := tools.Command(ctx, paths.YtDlp, args...)
 	var stderr strings.Builder
@@ -248,7 +251,7 @@ func (e *Engine) inspectVideo(ctx context.Context, paths tools.Paths, s config.S
 			md.Thumbnail = md.Entries[0].Thumbnail
 		}
 	} else {
-		md.PlaylistURL = youtubePlaylistURL(url)
+		md.PlaylistURL = watchPlaylistURL(url)
 	}
 	return md, nil
 }
@@ -479,7 +482,9 @@ func (e *Engine) run(ctx context.Context, j *Job) {
 }
 
 func (e *Engine) runYtDlp(ctx context.Context, j *Job, paths tools.Paths, s config.Settings) error {
-	args := append(commonArgs(paths, s), downloadArgs(paths, s, j)...)
+	cookies, done := e.cookieFile(ctx, s)
+	defer done()
+	args := append(commonArgs(paths, s, cookies), downloadArgs(paths, s, j)...)
 	args = append(args, "--", j.URL)
 	slog.Info("download starting", "url", j.URL, "audio", j.Audio)
 	e.mutate(j, func(j *Job) { j.State = Downloading })
@@ -535,7 +540,7 @@ func (e *Engine) readProgress(j *Job, r io.Reader) {
 			path := strings.TrimPrefix(line, "FINAL:")
 			e.mutate(j, func(j *Job) { j.FilePath = path })
 		case strings.HasPrefix(line, "TITLE:"):
-			// Some playlists (e.g. SoundCloud) only give links until each item resolves.
+			// Some playlists only give links until each item resolves.
 			if title := strings.TrimPrefix(line, "TITLE:"); title != "" && title != "NA" {
 				e.mutate(j, func(j *Job) { j.Title = title })
 			}
@@ -593,8 +598,9 @@ func (e *Engine) readProgress(j *Job, r io.Reader) {
 	_, _ = io.Copy(io.Discard, r) // keep draining if the scanner gave up on a huge line
 }
 
-// commonArgs apply to both inspection and download.
-func commonArgs(p tools.Paths, s config.Settings) []string {
+// commonArgs apply to both inspection and download. cookies is a
+// cookies.txt to use instead of the browser's, or "" (see cookieFile).
+func commonArgs(p tools.Paths, s config.Settings, cookies string) []string {
 	args := []string{"--no-colors", "--no-warnings"}
 	if p.Deno != "" {
 		args = append(args, "--js-runtimes", "deno:"+p.Deno)
@@ -602,10 +608,19 @@ func commonArgs(p tools.Paths, s config.Settings) []string {
 	if p.FFmpegDir != "" {
 		args = append(args, "--ffmpeg-location", p.FFmpegDir)
 	}
-	if s.BrowserCookies != "" {
-		args = append(args, "--cookies-from-browser", s.BrowserCookies)
-	}
+	args = append(args, cookieArgs(s, cookies)...)
 	return args
+}
+
+// cookieArgs tell yt-dlp or gallery-dl (they take the same options) which cookies to use.
+func cookieArgs(s config.Settings, cookies string) []string {
+	switch {
+	case cookies != "":
+		return []string{"--cookies", cookies}
+	case s.BrowserCookies != "" && s.BrowserCookies != config.OwnBrowser:
+		return []string{"--cookies-from-browser", s.BrowserCookies}
+	}
+	return nil
 }
 
 func downloadArgs(p tools.Paths, s config.Settings, j *Job) []string {

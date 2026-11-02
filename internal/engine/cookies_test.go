@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"whydah/internal/config"
 )
 
 func TestParseCookies(t *testing.T) {
@@ -79,5 +81,53 @@ func TestRenderedCandidates(t *testing.T) {
 	}
 	if !got[1].measured || got[1].Width != 1200 || got[0].measured || got[0].Thumb != "https://example.com/a-800.jpg" {
 		t.Errorf("sizes: %+v %+v", got[0], got[1])
+	}
+}
+
+// The sign-in browser's cookies, read over CDP, reach yt-dlp as a cookies.txt.
+func TestCookiesFromCDP(t *testing.T) {
+	jar := fromCDP([]cdpCookie{
+		{Name: "sid", Value: "abc", Domain: ".Example.com", Path: "/", Expires: 2000000000.5, Secure: true},
+		{Name: "sess", Value: "xyz", Domain: "www.example.com", Path: "/account", Expires: -1, HTTPOnly: true},
+		{Name: "nope", Value: "1", Domain: ".other.com", Path: "/", Expires: -1},
+		{Name: "bad", Value: "a\tb", Domain: "example.com", Path: "/", Expires: -1},
+	})
+	if c := jar[0]; c.Domain != "example.com" || !c.Sub || c.Expires != 2000000000 {
+		t.Errorf("domain cookie converted as %+v", c)
+	}
+	if c := jar[1]; c.Sub || c.Expires != 0 || !c.HTTPOnly {
+		t.Errorf("host-only session cookie converted as %+v", c)
+	}
+	if got := jar.forSite("example.com"); len(got) != 3 {
+		t.Errorf("forSite kept %d cookies, want 3", len(got))
+	}
+
+	var b strings.Builder
+	if err := jar.write(&b); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "bad") {
+		t.Error("wrote a cookie with a tab in it, which would break the file")
+	}
+	back := parseCookies(strings.NewReader(b.String()), "example.com")
+	if len(back) != 2 || back[0] != jar[0] || back[1] != jar[1] {
+		t.Errorf("read back %+v, want %+v", back, jar[:2])
+	}
+}
+
+func TestCookieArgs(t *testing.T) {
+	cases := []struct {
+		browser, file string
+		want          string
+	}{
+		{"", "", ""},
+		{"firefox", "", "--cookies-from-browser firefox"},
+		{config.OwnBrowser, "", ""}, // not signed in anywhere yet
+		{config.OwnBrowser, "/x/cookies.txt", "--cookies /x/cookies.txt"},
+	}
+	for _, c := range cases {
+		if got := strings.Join(cookieArgs(config.Settings{BrowserCookies: c.browser}, c.file), " "); got != c.want {
+			t.Errorf("cookieArgs(%q, %q) = %q, want %q", c.browser, c.file, got, c.want)
+		}
 	}
 }

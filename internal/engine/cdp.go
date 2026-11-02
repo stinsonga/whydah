@@ -118,31 +118,58 @@ func (c *cdpConn) call(ctx context.Context, session, method string, params, out 
 	}
 }
 
-// headless is a running browser with a throwaway profile.
+// headless is a running browser: the crow's nest's, with a throwaway
+// profile, or one on the sign-in profile (signin.go), which is kept.
 type headless struct {
 	cmd     *exec.Cmd
 	kill    context.CancelFunc // ends the browser and its helper processes
 	profile string
+	keep    bool // the profile outlives the browser
 	cdp     *cdpConn
 	once    sync.Once
 }
 
-// startHeadless launches the browser at path and connects to it. Events from
-// every page go to onEvent.
+// browserOpts say how to start a browser. The zero value is the crow's
+// nest's: headless, with a throwaway profile.
+type browserOpts struct {
+	profile string // a profile folder to keep, or "" for a throwaway one
+	visible bool   // a window people use, rather than headless
+	url     string // the first page, for a visible browser ("" for its new tab page)
+}
+
+// startHeadless launches the browser at path headless with a throwaway
+// profile and connects to it. Events from every page go to onEvent.
 func startHeadless(ctx context.Context, path string, onEvent func(cdpMsg)) (*headless, error) {
-	profile, err := os.MkdirTemp("", tools.BrowserProfilePrefix)
-	if err != nil {
-		return nil, err
+	return startBrowser(ctx, path, browserOpts{}, onEvent)
+}
+
+// startBrowser launches the browser at path as opt says and connects to it.
+func startBrowser(ctx context.Context, path string, opt browserOpts, onEvent func(cdpMsg)) (*headless, error) {
+	profile, keep := opt.profile, opt.profile != ""
+	if keep {
+		if err := os.MkdirAll(profile, 0o700); err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		if profile, err = os.MkdirTemp("", tools.BrowserProfilePrefix); err != nil {
+			return nil, err
+		}
 	}
 	args := []string{
-		"--headless", "--user-data-dir=" + profile,
+		"--user-data-dir=" + profile,
 		"--remote-debugging-port=0", "--remote-allow-origins=" + devtoolsOrigin,
 		"--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync",
-		"--disable-background-networking", "--disable-component-update", "--mute-audio", "--hide-scrollbars",
+		"--disable-background-networking", "--disable-component-update",
 		"--disable-blink-features=AutomationControlled", // some sites refuse pages that say they're automated
-		"--password-store=basic", "--use-mock-keychain", // don't ask for the macOS keychain
-		"--window-size=1366,900",
-		"about:blank",
+		"--password-store=basic", "--use-mock-keychain", // don't ask for the macOS keychain; both ways must match to read the profile's cookies
+	}
+	if opt.visible {
+		if opt.url != "" {
+			args = append(args, opt.url)
+		}
+	} else {
+		args = append(args, "--headless", "--mute-audio", "--hide-scrollbars", "--window-size=1366,900", "about:blank")
 	}
 	life, kill := context.WithCancel(context.Background()) // close() ends it, gracefully first
 	cmd := tools.Command(life, path, args...)
@@ -152,10 +179,12 @@ func startHeadless(ctx context.Context, path string, onEvent func(cdpMsg)) (*hea
 	}
 	if err != nil {
 		kill()
-		os.RemoveAll(profile)
+		if !keep {
+			os.RemoveAll(profile)
+		}
 		return nil, fmt.Errorf("starting the browser: %w", err)
 	}
-	h := &headless{cmd: cmd, kill: kill, profile: profile}
+	h := &headless{cmd: cmd, kill: kill, profile: profile, keep: keep}
 
 	// It prints "DevTools listening on ws://127.0.0.1:PORT/devtools/browser/ID".
 	found := make(chan string, 1)
@@ -188,7 +217,7 @@ func startHeadless(ctx context.Context, path string, onEvent func(cdpMsg)) (*hea
 }
 
 // close shuts the browser down (killing it if it won't go) and deletes its
-// profile. It's safe to call more than once.
+// profile, unless it's kept. It's safe to call more than once.
 func (h *headless) close() { h.once.Do(h.shutdown) }
 
 func (h *headless) shutdown() {
@@ -206,6 +235,9 @@ func (h *headless) shutdown() {
 	}
 	h.kill() // also takes any helper processes still around
 	<-done
+	if h.keep {
+		return
+	}
 	for range 5 { // its helper processes may still be letting go of files
 		if os.RemoveAll(h.profile) == nil {
 			return
@@ -234,12 +266,17 @@ func (h *headless) newContext(ctx context.Context) (string, error) {
 	return r.BrowserContextID, err
 }
 
-// newPage opens a tab in a browser context and returns its session id.
+// newPage opens a tab in a browser context ("" for the profile's own) and
+// returns its session id.
 func (h *headless) newPage(ctx context.Context, browserContext string) (string, error) {
 	var target struct {
 		TargetID string `json:"targetId"`
 	}
-	if err := h.cdp.call(ctx, "", "Target.createTarget", map[string]any{"url": "about:blank", "browserContextId": browserContext}, &target); err != nil {
+	params := map[string]any{"url": "about:blank"}
+	if browserContext != "" {
+		params["browserContextId"] = browserContext
+	}
+	if err := h.cdp.call(ctx, "", "Target.createTarget", params, &target); err != nil {
 		return "", err
 	}
 	var attached struct {

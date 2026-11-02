@@ -246,7 +246,9 @@ type streamInfo struct {
 func (e *Engine) probeStream(ctx context.Context, paths tools.Paths, s config.Settings, st Stream) (streamInfo, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	args := append(commonArgs(paths, s), "-J", "--no-playlist", "--socket-timeout", "15")
+	cookies, done := e.cookieFile(ctx, s)
+	defer done()
+	args := append(commonArgs(paths, s, cookies), "-J", "--no-playlist", "--socket-timeout", "15")
 	args = append(append(args, streamArgs(st.Referer, st.Origin)...), "--", st.URL)
 	release := e.tools.Use()
 	defer release()

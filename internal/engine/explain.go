@@ -92,8 +92,11 @@ func withHint(e *i18n.Error, hint, site string, s config.Settings) *i18n.Error {
 	if hint == "" {
 		return e
 	}
-	if s.BrowserCookies == "" {
+	switch s.BrowserCookies {
+	case "":
 		return e.WithHint(map[string]string{"cookies": "hint.cookies_off", "forbidden": "hint.forbidden"}[hint])
+	case config.OwnBrowser:
+		return e.WithHint(map[string]string{"cookies": "hint.cookies_own", "forbidden": "hint.forbidden_own"}[hint])
 	}
 	e.Args["browser"] = config.BrowserName(s.BrowserCookies)
 	return e.WithHint(map[string]string{"cookies": "hint.cookies_on", "forbidden": "hint.forbidden_cookies"}[hint])

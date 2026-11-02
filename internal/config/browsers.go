@@ -14,6 +14,10 @@ import (
 // SupportedBrowsers are the names yt-dlp accepts for --cookies-from-browser.
 var SupportedBrowsers = []string{"chrome", "firefox", "safari", "edge", "brave", "chromium", "opera", "vivaldi"}
 
+// OwnBrowser, as the cookie source, is Whydah's own sign-in browser: a
+// profile people sign in to sites with from Settings.
+const OwnBrowser = "whydah"
+
 // DetectBrowsers returns the supported browsers that appear to be installed,
 // judged by the presence of their profile directory.
 func DetectBrowsers() []string {
@@ -101,6 +105,8 @@ func BrowserName(browser string) string {
 		return ""
 	case "edge":
 		return "Microsoft Edge"
+	case OwnBrowser:
+		return "Whydah's sign-in browser"
 	}
 	return strings.ToUpper(browser[:1]) + browser[1:]
 }

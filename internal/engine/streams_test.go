@@ -58,11 +58,11 @@ func TestPlayerDetection(t *testing.T) {
 	}{
 		{"video tag", `<video poster="p.jpg"></video>`, true},
 		{"embedded player", `<iframe src="https://player.vendor.com/embed/abc"></iframe>`, true},
-		{"manifest in a script", `<script>var cfg = {"hls": "https:\/\/cdn.x.com\/a\/master.m3u8"}</script>`, true},
+		{"manifest in a script", `<script>var cfg = {"hls": "https:\/\/cdn.example.com\/a\/master.m3u8"}</script>`, true},
 		{"player library", `<script src="/js/video.js/8.0/video.min.js"></script>`, true},
 		{"og:video", `<meta property="og:video" content="https://example.com/v.mp4">`, true},
 		{"ad iframe", `<iframe src="https://tpc.googlesyndication.com/video/embed"></iframe>`, false},
-		{"plain page", `<img src="a.jpg"><iframe src="https://www.facebook.com/plugins/like.php"></iframe>`, false},
+		{"plain page", `<img src="a.jpg"><iframe src="https://social.example.com/plugins/like.php"></iframe>`, false},
 	} {
 		if got := extractPage(base, strings.NewReader(c.html)).player; got != c.want {
 			t.Errorf("%s: player = %v, want %v", c.name, got, c.want)

@@ -8,17 +8,17 @@ import (
 
 func TestPlaylistEntries(t *testing.T) {
 	raw := []ytInfo{
-		{URL: "https://www.youtube.com/watch?v=a", Title: "A", Duration: 65, Thumbnails: []struct{ URL string }{{"small"}, {"big"}}},
+		{URL: "https://video.example.com/watch?v=a", Title: "A", Duration: 65, Thumbnails: []struct{ URL string }{{"small"}, {"big"}}},
 		{URL: "abc123"}, // no usable URL: skipped
-		{URL: "https://soundcloud.com/forss/city-ports"},                    // title derived from the link
-		{URL: "https://api.soundcloud.com/tracks/295"},                      // numeric id: placeholder
+		{URL: "https://audio.example.com/harbour/city-ports"},               // title derived from the link
+		{URL: "https://api.audio.example.com/tracks/295"},                   // numeric id: placeholder
 		{URL: "id-only", WebpageURL: "https://example.com/v/2", Title: "C"}, // falls back to webpage_url
 	}
 	got := playlistEntries(raw)
 	want := []Entry{
-		{Index: 1, URL: "https://www.youtube.com/watch?v=a", Title: "A", Duration: 65, DurationString: "1:05", Thumbnail: "big"},
-		{Index: 2, URL: "https://soundcloud.com/forss/city-ports", Title: "city ports", DurationString: "Unknown"},
-		{Index: 3, URL: "https://api.soundcloud.com/tracks/295", Title: "Item 3", DurationString: "Unknown"},
+		{Index: 1, URL: "https://video.example.com/watch?v=a", Title: "A", Duration: 65, DurationString: "1:05", Thumbnail: "big"},
+		{Index: 2, URL: "https://audio.example.com/harbour/city-ports", Title: "city ports", DurationString: "Unknown"},
+		{Index: 3, URL: "https://api.audio.example.com/tracks/295", Title: "Item 3", DurationString: "Unknown"},
 		{Index: 4, URL: "https://example.com/v/2", Title: "C", DurationString: "Unknown"},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -26,18 +26,18 @@ func TestPlaylistEntries(t *testing.T) {
 	}
 }
 
-func TestYoutubePlaylistURL(t *testing.T) {
+func TestWatchPlaylistURL(t *testing.T) {
 	cases := map[string]string{
 		"https://www.youtube.com/watch?v=x&list=PL123":  "https://www.youtube.com/playlist?list=PL123",
 		"https://m.youtube.com/watch?v=x&list=RDx&ab=1": "https://www.youtube.com/playlist?list=RDx",
 		"https://youtu.be/x?list=PL9":                   "https://www.youtube.com/playlist?list=PL9",
 		"https://www.youtube.com/watch?v=x":             "",
 		"https://notyoutube.com/watch?v=x&list=PL123":   "",
-		"https://vimeo.com/123?list=PL123":              "",
+		"https://video.example.com/123?list=PL123":      "",
 	}
 	for in, want := range cases {
-		if got := youtubePlaylistURL(in); got != want {
-			t.Errorf("youtubePlaylistURL(%q) = %q, want %q", in, got, want)
+		if got := watchPlaylistURL(in); got != want {
+			t.Errorf("watchPlaylistURL(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

@@ -11,6 +11,7 @@ const (
 	JobUpdated    Type = "job_updated"    // Data: engine.Job
 	ToolsStatus   Type = "tools_status"   // Data: tools.Status
 	LinksProgress Type = "links_progress" // Data: engine.LinksProgress
+	SignInStatus  Type = "signin_status"  // Data: engine.SignInStatus
 )
 
 type URLDetectedData struct {

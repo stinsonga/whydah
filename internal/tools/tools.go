@@ -137,14 +137,14 @@ func (m *Manager) setup(ctx context.Context) {
 	}
 
 	if deno, err := m.ensureDeno(ctx); err != nil {
-		m.warn("deno unavailable (%v): some YouTube formats may be missing", err)
+		m.warn("deno unavailable (%v): some sites' formats may be missing", err)
 	} else {
 		p.Deno = deno
 	}
 
 	var gdlVersion string
 	if gdl, err := m.ensureGalleryDL(ctx); err != nil {
-		m.warn("gallery-dl unavailable (%v): photos are found by scanning the page only, which misses galleries on sites like Instagram or Reddit", err)
+		m.warn("gallery-dl unavailable (%v): photos are found by scanning the page only, which misses galleries only gallery-dl knows how to read", err)
 	} else {
 		p.GalleryDL, gdlVersion = gdl, m.version(ctx, gdl)
 	}

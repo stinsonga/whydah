@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -24,11 +26,11 @@ func TestBrowserPool(t *testing.T) {
 	var b browserPool
 	defer b.close()
 
-	ha, sa, doneA, err := b.tab(ctx, path, newPageWatch())
+	ha, sa, doneA, err := b.tab(ctx, path, "", newPageWatch())
 	if err != nil {
 		t.Fatal(err)
 	}
-	hb, sb, doneB, err := b.tab(ctx, path, newPageWatch())
+	hb, sb, doneB, err := b.tab(ctx, path, "", newPageWatch())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,12 +70,71 @@ func TestBrowserPool(t *testing.T) {
 	for !ha.exited() && time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
 	}
-	hc, _, doneC, err := b.tab(ctx, path, newPageWatch())
+	hc, _, doneC, err := b.tab(ctx, path, "", newPageWatch())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer doneC()
 	if hc == ha {
 		t.Error("kept using a browser that had exited")
+	}
+}
+
+// TestSignInProfile runs a real browser on a kept profile, so it's skipped
+// where there's no installed one.
+func TestSignInProfile(t *testing.T) {
+	tm := tools.New(t.TempDir(), events.NewHub(), func() string { return "stable" })
+	path := tm.VisibleBrowser()
+	if path == "" {
+		t.Skip("no Chromium-family browser installed")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	profile := filepath.Join(t.TempDir(), tools.SignInProfileName)
+	var b browserPool
+	defer b.close()
+
+	h, session, done, err := b.tab(ctx, path, profile, newPageWatch())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expires := time.Now().Add(time.Hour).Unix()
+	if err := h.cdp.call(ctx, session, "Network.setCookies", map[string]any{"cookies": []map[string]any{
+		{"name": "k", "value": "v", "url": "https://whydah.test/", "expires": expires}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	done()
+	b.shut(true)
+
+	// The cookie outlives the browser, and the next look sees it.
+	list, err := b.cookies(ctx, path, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jar := fromCDP(list).forSite("whydah.test")
+	if len(jar) != 1 || jar[0].Value != "v" || jar[0].Expires != expires {
+		t.Errorf("cookies after a restart: %+v; want k=v expiring %d", jar, expires)
+	}
+
+	b.mu.Lock()
+	b.signingIn = true // as while the sign-in window is open
+	b.mu.Unlock()
+	if _, _, _, err := b.tab(ctx, path, profile, newPageWatch()); err == nil {
+		t.Error("a look used the profile while the sign-in window had it")
+	}
+	if _, _, done, err := b.tab(ctx, path, "", newPageWatch()); err != nil {
+		t.Errorf("a look without the profile: %v", err)
+	} else {
+		done()
+	}
+	b.mu.Lock()
+	b.signingIn = false
+	b.mu.Unlock()
+
+	if err := b.forget(profile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(profile); !os.IsNotExist(err) {
+		t.Errorf("the profile is still there after forgetting it: %v", err)
 	}
 }

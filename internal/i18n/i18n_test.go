@@ -32,7 +32,7 @@ func TestMatch(t *testing.T) {
 }
 
 func TestT(t *testing.T) {
-	if got := T("en", "error.sign_in", map[string]string{"site": "vimeo.com"}); got != "vimeo.com only shows this to people who are signed in." {
+	if got := T("en", "error.sign_in", map[string]string{"site": "example.com"}); got != "example.com only shows this to people who are signed in." {
 		t.Errorf("filled message = %q", got)
 	}
 	if got := T("en-AU", "error.drm", nil); !strings.Contains(got, "DRM") { // a region falls back to its language

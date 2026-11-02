@@ -136,7 +136,7 @@ func Salvage(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *ev
 			fmt.Printf("→ playlist: %s (%d items)\n", md.Title, len(md.Entries))
 			items := make([]engine.Item, len(md.Entries))
 			for i, en := range md.Entries {
-				items[i] = engine.Item{Index: en.Index, URL: en.URL, Title: en.Title, Thumbnail: en.Thumbnail}
+				items[i] = engine.Item{Index: en.Index, URL: en.URL, Title: en.Title, Thumbnail: en.Thumbnail, StreamFrom: en.StreamFrom}
 			}
 			for _, j := range eng.DownloadPlaylist(md.Title, len(md.Entries), audio, items) {
 				p.pending[j.ID] = true
