@@ -34,10 +34,15 @@ dist:
 
 # Whydah.app, a universal (Apple Silicon + Intel) macOS app. Opened from
 # Finder it gets its own privacy permissions (e.g. Full Disk Access for browser
-# cookies) instead of borrowing the terminal's. Signed with SIGN_ID if that
-# certificate is in the keychain (see scripts/make-signing-cert.sh), so the
-# permissions survive rebuilds; otherwise ad-hoc, and they reset each build.
-SIGN_ID ?= Whydah Local Signing
+# cookies) instead of borrowing the terminal's. Signed with your Apple
+# Developer ID if one is in the keychain (what releases use), else with the
+# local certificate from scripts/make-signing-cert.sh, so the permissions
+# survive rebuilds; with neither, ad-hoc, and they reset each build.
+DEVELOPER_ID := $(shell security find-identity -v -p codesigning 2>/dev/null | awk '/"Developer ID Application:/ {print $$2; exit}')
+SIGN_ID ?= $(or $(DEVELOPER_ID),Whydah Local Signing)
+# The hardened runtime, which notarization requires (release.sh adds a
+# secure timestamp).
+SIGN_FLAGS ?= --options runtime
 APP := bin/Whydah.app
 
 app:
@@ -49,7 +54,7 @@ app:
 	@rm bin/whydah-arm64 bin/whydah-amd64
 	sed 's/VERSION/$(VERSION)/g' packaging/macos/Info.plist > $(APP)/Contents/Info.plist
 	@if security find-identity -p codesigning | grep -q "$(SIGN_ID)"; then \
-		codesign --force --sign "$(SIGN_ID)" $(APP); \
+		codesign --force $(SIGN_FLAGS) --sign "$(SIGN_ID)" $(APP); \
 	else \
 		echo "note: no \"$(SIGN_ID)\" certificate; signing ad-hoc (permissions reset on each build)"; \
 		codesign --force --sign - $(APP); \

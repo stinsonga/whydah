@@ -317,43 +317,56 @@ opening it again while it runs reopens the UI. Quit from the UI.
 
 Opened this way, Whydah gets its own macOS privacy permissions instead of
 borrowing the terminal's, so Full Disk Access (needed for browser cookies) can
-go to Whydah alone. macOS ties that permission to the app's signature; to keep
-it across rebuilds, create a local signing certificate once:
+go to Whydah alone. macOS ties that permission to the app's signature, so
+`make app` signs every build alike: with your Apple Developer ID Application
+certificate if it's in the keychain (as releases are), so the permission
+carries over between your builds and releases. Without one, make a local
+signing certificate once instead:
 
 ```sh
 ./scripts/make-signing-cert.sh   # adds "Whydah Local Signing" to your login keychain
 make app
 ```
 
-Without the certificate the app is signed ad-hoc, and the permission has to be
-switched off and on again after each build. Releases are signed with the same
-certificate, so the permission carries over between them on other Macs too.
-Other Macs don't trust it, though: the first time someone opens a release
-they downloaded, macOS asks them to allow it in System Settings → Privacy &
-Security (*Open Anyway*). Updates Whydah installs itself don't ask. Getting
-rid of that first prompt needs an Apple Developer ID.
+With neither, the app is signed ad-hoc, and the permission has to be switched
+off and on again after each build. `SIGN_ID=...` picks a certificate.
 
 ### Releasing
 
 Releases are GitHub releases of this repository (the git remote's; the
 Makefile passes it to the build). Installed copies update themselves from the
-latest one. Once, before the first release:
+latest one. The macOS builds are signed with an Apple Developer ID and
+notarized, so they open without asking. Once, before the first release:
 
-```sh
-./scripts/make-signing-cert.sh       # if you haven't: signs the macOS builds
-go run ./packaging/release keygen    # the release signing key; commit internal/selfupdate/key.go
-```
+1. With a paid Apple Developer Program membership, create a *Developer ID
+   Application* certificate (Xcode → Settings → Accounts → Manage
+   Certificates → +).
+2. Give notarytool a way to sign in, saved in your keychain as
+   `whydah-notary`. An App Store Connect API key with the Developer role
+   (Users and Access → Integrations) works:
+
+   ```sh
+   xcrun notarytool store-credentials whydah-notary --key AuthKey_XXXX.p8 --key-id XXXX --issuer XXXX
+   ```
+
+   (or `--apple-id`, `--team-id` and an app-specific password).
+   `NOTARY_PROFILE` picks another profile.
+3. Make the release signing key:
+
+   ```sh
+   go run ./packaging/release keygen    # commit internal/selfupdate/key.go
+   ```
 
 `keygen` keeps the private key outside the repository, in your config folder
 (`whydah-release/signing-key`; `WHYDAH_RELEASE_KEY` overrides where). Back
-it up, and the signing certificate too. Releases signed with a different key
-won't install over existing copies, and a new certificate resets macOS
-permissions for everyone.
+it up, and the certificate and API key too. Releases signed with a different
+key won't install over existing copies, and a certificate from another team
+resets macOS permissions for everyone.
 
 Then, from a clean, pushed working tree:
 
 ```sh
-make release DRY=1   # build and sign into dist/ without publishing, to check
+make release DRY=1   # build, sign and notarize into dist/ without publishing, to check
 make release         # tag, push the tag, and publish with gh
 ```
 
@@ -409,11 +422,9 @@ other websites can't drive it from your browser.
 
 ## Known limitations
 
-- Releases aren't signed with an Apple Developer ID or notarized. macOS
-  blocks a downloaded copy the first time until it's allowed in System
-  Settings → Privacy & Security (or, for the terminal binary,
-  `xattr -d com.apple.quarantine whydah`). Windows SmartScreen shows a
-  similar warning. Updates Whydah installs itself aren't affected.
+- The Windows builds aren't code-signed, so Windows SmartScreen may warn
+  the first time a downloaded copy is opened (*More info* → *Run anyway*).
+  Updates Whydah installs itself aren't affected.
 - On a linked page yt-dlp can't read, the crow's nest keeps the first
   stream it sees play, which is now and then a trailer rather than the
   video. Past the first 40 such pages in one check, the rest come back as

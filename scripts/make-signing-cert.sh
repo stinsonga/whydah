@@ -1,13 +1,11 @@
 #!/bin/sh
 # Creates a self-signed code-signing certificate, "Whydah Local Signing", in
-# your login keychain, for `make app`. macOS ties privacy permissions (like
-# Full Disk Access) to the app's signature; signing every build with the same
-# certificate keeps them across rebuilds, and across releases (make release)
-# on other Macs too. Other Macs don't trust it, so a downloaded release
-# still needs "Open Anyway" the first time; updates Whydah installs itself
-# don't. Keep it (and back it up) once you've published releases: a new one
-# would reset those permissions for everyone. Keychain Access → My
-# Certificates has it.
+# your login keychain, for `make app` without an Apple Developer ID. macOS
+# ties privacy permissions (like Full Disk Access) to the app's signature;
+# signing every build with the same certificate keeps them across rebuilds.
+# Releases need a Developer ID instead (see README, "Releasing"); with one in
+# the keychain, `make app` uses it and this isn't needed. Keychain Access →
+# My Certificates has it.
 set -eu
 name="Whydah Local Signing"
 keychain="$HOME/Library/Keychains/login.keychain-db"
