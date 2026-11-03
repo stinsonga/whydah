@@ -26,6 +26,8 @@ security find-identity -p codesigning | grep -q "$sign_id" || fail "no \"$sign_i
 if [ $publish = 1 ]; then
 	command -v gh >/dev/null || fail "publishing needs the GitHub CLI (gh)"
 	[ -z "$(git status --porcelain)" ] || fail "commit your changes first: a release is built from a tagged commit"
+	git fetch -q origin || fail "can't reach origin to check this commit is pushed"
+	git merge-base --is-ancestor HEAD '@{upstream}' 2>/dev/null || fail "push first: this commit isn't on $(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || echo the remote)"
 fi
 
 # The version is the date, with a count for a second release the same day.
@@ -50,6 +52,26 @@ if [ $publish = 0 ]; then
 	echo "dry run: the release is in dist/, not published"
 	exit 0
 fi
+# Which file to download goes above the generated list of changes.
+notes=$(mktemp)
+trap 'rm -f "$notes"' EXIT
+cat >"$notes" <<'NOTES'
+## Which file do I need?
+
+| System | Download |
+| --- | --- |
+| macOS (Apple Silicon or Intel) | `Whydah-macos.zip`: unzip it and move Whydah.app to Applications |
+| Windows (most PCs) | `whydah-windows-amd64.exe` |
+| Windows on ARM | `whydah-windows-arm64.exe` |
+| Linux (most PCs) | `whydah-linux-amd64` |
+| Linux on ARM (Raspberry Pi and the like) | `whydah-linux-arm64` |
+
+`whydah-darwin-*` are the macOS command-line programs without the app. `SHA256SUMS` and `SHA256SUMS.sig` are what Whydah checks its updates against.
+
+**The first time you open it:** these builds aren't signed by Apple or Microsoft, so your system asks first. On macOS, open Whydah once, then allow it in System Settings → Privacy & Security (*Open Anyway*). On Windows, choose *More info* → *Run anyway*. On Linux, make it runnable first: `chmod +x whydah-linux-*`. After that, Whydah offers its own updates and installs them without asking again.
+
+NOTES
+
 git tag "$version"
 git push origin "$version"
-gh release create "$version" dist/* --title "Whydah $version" --generate-notes
+gh release create "$version" dist/* --title "Whydah $version" --notes-file "$notes" --generate-notes

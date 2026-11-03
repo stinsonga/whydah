@@ -294,7 +294,7 @@ Requires Go 1.26+. No cgo, so every platform cross-compiles from any machine.
 ```sh
 make build   # ./bin/whydah for this machine
 make app     # bin/Whydah.app, a universal macOS app (see below)
-make dist    # dist/whydah-{darwin,windows,linux}-{arch}
+make dist    # dist/whydah-{darwin,windows,linux}-{arch}, arm64 and amd64 each
 make vet      # this platform, Windows and Linux
 go test ./...
 make e2e      # end-to-end tests (below)
@@ -357,11 +357,15 @@ make release DRY=1   # build and sign into dist/ without publishing, to check
 make release         # tag, push the tag, and publish with gh
 ```
 
+`make release` refuses to run with uncommitted or unpushed changes.
+
 The version is the date (`2026.11.02`, then `2026.11.02.2` for a second one
 that day). A release has a build for each platform, `Whydah-macos.zip` (the
 app), `SHA256SUMS` and `SHA256SUMS.sig`, the list's ed25519 signature. Whydah
 only installs a build that's in a list signed with the key built into it, so
-access to the GitHub repository alone isn't enough to push an update.
+access to the GitHub repository alone isn't enough to push an update. The
+release notes start with a table of which file to download for each system,
+followed by the changes since the last release.
 
 ### The icon
 

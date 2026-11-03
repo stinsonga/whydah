@@ -3,7 +3,7 @@ VERSION ?= $(shell date +%Y.%m.%d)
 # repository of the git remote ("owner/name"). Without one, builds don't update.
 REPO ?= $(shell git remote get-url origin 2>/dev/null | sed -nE 's|^.*github\.com[:/]([^/]+/[^/]+)$$|\1|p' | sed 's|\.git$$||')
 LDFLAGS := -s -w -X main.version=$(VERSION) -X whydah/internal/selfupdate.repo=$(REPO)
-TARGETS := darwin/arm64 darwin/amd64 windows/amd64 linux/amd64 linux/arm64
+TARGETS := darwin/arm64 darwin/amd64 windows/amd64 windows/arm64 linux/amd64 linux/arm64
 
 .PHONY: build run dist vet e2e release clean app icon winres
 
