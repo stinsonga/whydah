@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"whydah/internal/events"
+	"whydah/internal/i18n"
 )
 
 const (
@@ -45,7 +46,7 @@ type UpdateStatus struct {
 	CheckedAt      time.Time       `json:"checked_at"`
 	CheckError     string          `json:"check_error"`
 	State          string          `json:"state"`     // "", "checking", "waiting" (for running downloads), "installing"
-	Error          string          `json:"error"`     // last install failure
+	Error          *i18n.Error     `json:"error"`     // last install failure
 	Installed      string          `json:"installed"` // versions after the last successful refit, for a confirmation
 }
 
@@ -178,7 +179,7 @@ func (m *Manager) Install(ctx context.Context) error {
 		m.mu.Unlock()
 		return errors.New("an update is already in progress")
 	}
-	m.st.Update.State, m.st.Update.Error, m.st.Update.Installed = "waiting", "", ""
+	m.st.Update.State, m.st.Update.Error, m.st.Update.Installed = "waiting", nil, ""
 	snap := m.st
 	m.mu.Unlock()
 	m.hub.Publish(events.ToolsStatus, snap)
@@ -221,7 +222,7 @@ func (m *Manager) Install(ctx context.Context) error {
 	}
 	err := errors.Join(errs...)
 	m.update(func(s *Status) {
-		s.Stage = "" // downloadFile reports progress there
+		s.Stage = nil // downloadFile reports progress there
 		s.Update.State, s.Update.Channel = "", channel
 		s.YtDlpVersion, s.GalleryDLVer, s.HeadlessVer = ytVersion, gdlVersion, hlVersion
 		if m.managed(st.Paths.YtDlp) {
@@ -236,7 +237,7 @@ func (m *Manager) Install(ctx context.Context) error {
 		s.Update.setPending(s)
 		s.Update.CheckedAt, s.Update.CheckError = time.Now(), ""
 		if err != nil {
-			s.Update.Error = err.Error()
+			s.Update.Error = i18n.New("error.refit").WithDetail(err.Error())
 			return
 		}
 		s.Update.Installed = installedSummary(s)

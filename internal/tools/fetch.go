@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -110,7 +111,7 @@ func (m *Manager) fetchArchive(ctx context.Context, a archive, destDir string) e
 	if err := m.downloadFile(ctx, a.url, file, a.label); err != nil {
 		return err
 	}
-	m.stage("Unpacking %s", a.label)
+	m.stage("setup.unpacking", "tool", a.label)
 	switch a.kind {
 	case "zip":
 		err = extractZip(file, destDir, a.files)
@@ -236,9 +237,9 @@ func (p *progressWriter) Write(b []byte) (int, error) {
 	if time.Since(p.last) > 500*time.Millisecond {
 		p.last = time.Now()
 		if p.total > 0 {
-			p.m.stage("Downloading %s: %d of %d MB", p.label, p.n>>20, p.total>>20)
+			p.m.stage("setup.progress", "tool", p.label, "done", strconv.FormatInt(p.n>>20, 10), "total", strconv.FormatInt(p.total>>20, 10))
 		} else {
-			p.m.stage("Downloading %s: %d MB", p.label, p.n>>20)
+			p.m.stage("setup.progress_unknown", "tool", p.label, "done", strconv.FormatInt(p.n>>20, 10))
 		}
 	}
 	return len(b), nil

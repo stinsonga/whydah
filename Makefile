@@ -1,8 +1,11 @@
 VERSION ?= $(shell date +%Y.%m.%d)
-LDFLAGS := -s -w -X main.version=$(VERSION)
+# Where releases are published, for Whydah to update itself from: the GitHub
+# repository of the git remote ("owner/name"). Without one, builds don't update.
+REPO ?= $(shell git remote get-url origin 2>/dev/null | sed -nE 's|^.*github\.com[:/]([^/]+/[^/]+)$$|\1|p' | sed 's|\.git$$||')
+LDFLAGS := -s -w -X main.version=$(VERSION) -X whydah/internal/selfupdate.repo=$(REPO)
 TARGETS := darwin/arm64 darwin/amd64 windows/amd64 linux/amd64 linux/arm64
 
-.PHONY: build run dist vet e2e clean app icon winres
+.PHONY: build run dist vet e2e release clean app icon winres
 
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/whydah .
@@ -52,6 +55,12 @@ app:
 		codesign --force --sign - $(APP); \
 	fi
 	@codesign --verify $(APP) && echo "built $(APP)"
+
+# Builds every platform, signs the builds and their checksums, and
+# publishes them as a GitHub release (see README, "Releasing").
+# DRY=1 stops before publishing.
+release:
+	./scripts/release.sh $(if $(DRY),--dry-run)
 
 # Redraws the icon in every format (packaging/icon/main.go is the drawing).
 # The files it writes are checked in, so builds don't need this.

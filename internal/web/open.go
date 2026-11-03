@@ -1,6 +1,7 @@
 package web
 
 import (
+	"os/exec"
 	"path/filepath"
 	"runtime"
 
@@ -11,11 +12,11 @@ import (
 func OpenPath(target string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		return tools.StartOutside("open", target)
+		return tools.StartOutside(exec.Command("open", target))
 	case "windows":
-		return tools.StartOutside("rundll32", "url.dll,FileProtocolHandler", target)
+		return tools.StartOutside(exec.Command("rundll32", "url.dll,FileProtocolHandler", target))
 	default:
-		return tools.StartOutside("xdg-open", target)
+		return tools.StartOutside(exec.Command("xdg-open", target))
 	}
 }
 
@@ -23,9 +24,9 @@ func OpenPath(target string) error {
 func RevealFile(path string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		return tools.StartOutside("open", "-R", path)
+		return tools.StartOutside(exec.Command("open", "-R", path))
 	case "windows":
-		return tools.StartOutside("explorer", "/select,", path)
+		return tools.StartOutside(exec.Command("explorer", "/select,", path))
 	default:
 		return OpenPath(filepath.Dir(path))
 	}

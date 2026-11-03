@@ -7,12 +7,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"whydah/internal/engine"
 	"whydah/internal/events"
 	"whydah/internal/i18n"
+	"whydah/internal/selfupdate"
 	"whydah/internal/tools"
 )
 
@@ -20,16 +22,16 @@ type printer struct {
 	pending   map[string]bool
 	lastPrint map[string]time.Time
 	lastState map[string]engine.State
-	lastStage string
+	lastStage string // in Lang
 	failed    int
 }
 
 func (p *printer) handle(ev events.Event) {
 	switch d := ev.Data.(type) {
 	case tools.Status:
-		if d.Stage != "" && d.Stage != p.lastStage {
-			p.lastStage = d.Stage
-			fmt.Println("·", d.Stage)
+		if d.Stage != nil && d.Stage.In(Lang) != p.lastStage {
+			p.lastStage = d.Stage.In(Lang)
+			fmt.Println("·", p.lastStage)
 		}
 	case engine.Job:
 		p.job(d)
@@ -64,7 +66,7 @@ func waitForTools(ctx context.Context, tm *tools.Manager, ch <-chan events.Event
 		select {
 		case err := <-ready:
 			if err != nil {
-				fmt.Println("✗", err)
+				fmt.Println("✗", Explained(err))
 				return 1
 			}
 			waiting = false
@@ -75,7 +77,7 @@ func waitForTools(ctx context.Context, tm *tools.Manager, ch <-chan events.Event
 		}
 	}
 	for _, w := range tm.Status().Warnings {
-		fmt.Println("!", w)
+		fmt.Println("!", problemText(w))
 	}
 	return 0
 }
@@ -105,7 +107,7 @@ func Salvage(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *ev
 			continue
 		}
 		if linked && len(md.Links) > 0 {
-			fmt.Printf("→ checking %s linked from %s…\n", plural(len(md.Links), "page"), md.Title)
+			fmt.Println(T("cli.checking_linked", "count", strconv.Itoa(len(md.Links)), "title", md.Title))
 			if md, err = eng.LinkedPlaylist(ctx, url, md.Title, md.Links); err != nil {
 				if ctx.Err() != nil {
 					return 130
@@ -115,10 +117,10 @@ func Salvage(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *ev
 				continue
 			}
 		} else if len(md.Links) > 0 {
-			fmt.Printf("  (%s linked from this page; add --linked to salvage them)\n", plural(len(md.Links), "possible video"))
+			fmt.Println(T("cli.linked_hint", "count", strconv.Itoa(len(md.Links))))
 		}
 		for _, st := range md.Streams {
-			fmt.Printf("→ stream: %s (%s)\n", st.Title, streamLine(st))
+			fmt.Println(T("cli.stream", "title", st.Title, "about", streamLine(st)))
 			j := eng.Download(engine.Request{URL: st.URL, Audio: audio || st.Kind == "audio", Title: st.Title,
 				Thumbnail: st.Thumbnail, Referer: st.Referer, Origin: st.Origin, Page: url})
 			p.pending[j.ID] = true
@@ -127,14 +129,14 @@ func Salvage(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *ev
 			continue
 		}
 		if md.Kind == "photos" {
-			fmt.Printf("→ photos: %s (%s)\n", md.Title, photoCount(md))
+			fmt.Println(T("cli.photos", "title", md.Title, "photos", photoCount(md)))
 			j := eng.DownloadPhotos(engine.PhotoRequest{URL: url, Title: md.Title, Source: md.Source,
 				Total: len(md.Photos), Truncated: md.Truncated, Items: md.Photos})
 			p.pending[j.ID] = true
 			continue
 		}
 		if md.Kind == "playlist" {
-			fmt.Printf("→ playlist: %s (%d items)\n", md.Title, len(md.Entries))
+			fmt.Println(T("cli.playlist", "title", md.Title, "items", T("ui.items", "count", strconv.Itoa(len(md.Entries)))))
 			items := make([]engine.Item, len(md.Entries))
 			for i, en := range md.Entries {
 				items[i] = engine.Item{Index: en.Index, URL: en.URL, Title: en.Title, Thumbnail: en.Thumbnail, StreamFrom: en.StreamFrom}
@@ -144,7 +146,7 @@ func Salvage(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *ev
 			}
 			continue
 		}
-		fmt.Printf("→ %s (%s, %s)\n", md.Title, md.Uploader, md.DurationString)
+		fmt.Println(T("cli.video", "title", md.Title, "uploader", md.Uploader, "duration", md.DurationString))
 		j := eng.Download(engine.Request{URL: url, Audio: audio, Title: md.Title, Thumbnail: md.Thumbnail})
 		p.pending[j.ID] = true
 	}
@@ -155,7 +157,7 @@ func Salvage(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *ev
 	for len(p.pending) > 0 {
 		select {
 		case <-ctx.Done():
-			fmt.Println("canceled") // main's eng.Shutdown stops the downloads
+			fmt.Println(T("cli.canceled")) // main's eng.Shutdown stops the downloads
 			return 130
 		case ev := <-ch:
 			p.handle(ev)
@@ -196,7 +198,8 @@ func Spyglass(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *e
 		fmt.Println(url)
 		switch md.Kind {
 		case "photos":
-			fmt.Printf("  photos: %s (%s, %s)\n", md.Title, photoCount(md), map[string]string{"page": "found on the page", "gallery-dl": "via gallery-dl", "browser": "from the crow's nest"}[md.Source])
+			via := map[string]string{"page": T("ui.via_page"), "gallery-dl": T("ui.via_gallery_dl"), "browser": T("ui.via_browser")}[md.Source]
+			fmt.Println(T("cli.spy_photos", "title", md.Title, "photos", photoCount(md), "via", via))
 			for _, ph := range md.Photos {
 				size := ""
 				if ph.Width > 0 {
@@ -205,25 +208,26 @@ func Spyglass(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *e
 				fmt.Printf("  %4d%s  %s\n", ph.Index, size, ph.URL)
 			}
 		case "playlist":
-			fmt.Printf("  playlist: %s (%d items)\n", md.Title, len(md.Entries))
+			fmt.Println(T("cli.spy_playlist", "title", md.Title, "items", T("ui.items", "count", strconv.Itoa(len(md.Entries)))))
 			for _, en := range md.Entries {
 				fmt.Printf("  %4d  %s  [%s]\n", en.Index, en.Title, en.DurationString)
 			}
 		case "links", "streams":
 		default:
-			fmt.Printf("  video: %s\n  by %s · %s\n", md.Title, md.Uploader, md.DurationString)
+			fmt.Println(T("cli.spy_video", "title", md.Title, "uploader", md.Uploader, "duration", md.DurationString))
 			if md.PlaylistURL != "" {
-				fmt.Printf("  from playlist: %s\n", md.PlaylistURL)
+				fmt.Println(T("cli.spy_from_playlist", "url", md.PlaylistURL))
 			}
 		}
 		for i, st := range md.Streams {
-			fmt.Printf("  stream %d: %s (%s)\n        %s\n", i+1, st.Title, streamLine(st), st.URL)
+			fmt.Println(T("cli.spy_stream", "n", strconv.Itoa(i+1), "title", st.Title, "about", streamLine(st)))
+			fmt.Println("        " + st.URL)
 		}
 		if len(md.Links) == 0 {
 			continue
 		}
 		if !linked {
-			fmt.Printf("  %s linked (add --linked to check them):\n", plural(len(md.Links), "possible video"))
+			fmt.Println(T("cli.spy_links", "count", strconv.Itoa(len(md.Links))))
 			for _, l := range md.Links {
 				fmt.Printf("        %s  %s\n", l.Title, l.URL)
 			}
@@ -234,10 +238,10 @@ func Spyglass(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *e
 			if ctx.Err() != nil {
 				return 130
 			}
-			fmt.Printf("  linked videos: %v\n", err)
+			fmt.Println(T("cli.spy_linked_error", "detail", Explained(err)))
 			continue
 		}
-		fmt.Printf("  linked videos: %d of %d links\n", len(pl.Entries), len(md.Links))
+		fmt.Println(T("cli.spy_linked", "count", strconv.Itoa(len(pl.Entries)), "total", strconv.Itoa(len(md.Links))))
 		for _, en := range pl.Entries {
 			fmt.Printf("  %4d  %s  [%s]  %s\n", en.Index, en.Title, en.DurationString, en.URL)
 		}
@@ -249,22 +253,12 @@ func Spyglass(ctx context.Context, eng *engine.Engine, tm *tools.Manager, hub *e
 	return 0
 }
 
-func plural(n int, word string) string {
-	if n == 1 {
-		return "1 " + word
-	}
-	return fmt.Sprintf("%d %ss", n, word)
-}
-
 func photoCount(md engine.Metadata) string {
-	n := fmt.Sprintf("%d photos", len(md.Photos))
-	if len(md.Photos) == 1 {
-		n = "1 photo"
-	}
+	n := strconv.Itoa(len(md.Photos))
 	if md.Truncated {
-		n = "more than " + n
+		return T("ui.photos_more", "count", n)
 	}
-	return n
+	return T("ui.kind_photos", "count", n)
 }
 
 // hintUpdate suggests a refit after failures, if newer tools exist.
@@ -275,7 +269,8 @@ func hintUpdate(ctx context.Context, tm *tools.Manager) {
 		return
 	}
 	if u := tm.Status().Update; u.Available {
-		fmt.Printf("\nNewer tools are available and may fix this: %s\nRun: whydah refit\n", pendingList(u.Pending))
+		fmt.Println()
+		fmt.Println(T("cli.update_hint", "pending", pendingList(u.Pending)))
 	}
 }
 
@@ -287,7 +282,6 @@ func pendingList(pending []tools.PendingUpdate) string {
 	return strings.Join(parts, ", ")
 }
 
-// Refit updates yt-dlp and gallery-dl and returns a process exit code.
 // SignIn opens the sign-in window at link (or its new tab page) and waits
 // for it to be closed.
 func SignIn(ctx context.Context, eng *engine.Engine, hub *events.Hub, link string) int {
@@ -297,12 +291,12 @@ func SignIn(ctx context.Context, eng *engine.Engine, hub *events.Hub, link strin
 		fmt.Fprintln(os.Stderr, "✗", Explained(err))
 		return 1
 	}
-	fmt.Println("Sign in to the sites you need in the window that opened, then close it.")
+	fmt.Println(T("cli.signin_wait"))
 	for {
 		select {
 		case ev := <-ch:
 			if st, ok := ev.Data.(engine.SignInStatus); ok && !st.Open {
-				fmt.Println("✓ Signed in. Choose \"Whydah's own sign-in browser\" for cookies in Settings, or use --browser whydah.")
+				fmt.Println(T("cli.signin_done", "option", T("ui.cookies_own")))
 				return 0
 			}
 		case <-ctx.Done():
@@ -311,35 +305,61 @@ func SignIn(ctx context.Context, eng *engine.Engine, hub *events.Hub, link strin
 	}
 }
 
+// Refit updates yt-dlp and gallery-dl and returns a process exit code.
 func Refit(ctx context.Context, tm *tools.Manager) int {
 	if _, err := tm.Wait(ctx); err != nil {
-		fmt.Println("✗", err)
+		fmt.Println("✗", Explained(err))
 		return 1
 	}
 	before := installed(tm.Status())
-	fmt.Println("Refitting: updating yt-dlp and gallery-dl…")
+	fmt.Println(T("ui.refit_installing"))
 	err := tm.Install(ctx)
 	after := installed(tm.Status())
 	for _, tool := range []string{"yt-dlp", "gallery-dl"} {
 		switch {
 		case after[tool] == "":
 		case after[tool] != before[tool]:
-			fmt.Printf("✓ %s updated: %s → %s\n", tool, before[tool], after[tool])
+			fmt.Println(T("cli.tool_updated", "tool", tool, "old", before[tool], "new", after[tool]))
 		default:
-			fmt.Printf("✓ %s is up to date (%s)\n", tool, after[tool])
+			fmt.Println(T("cli.tool_current", "tool", tool, "version", after[tool]))
 		}
 	}
 	if err != nil {
-		fmt.Println("✗", err)
+		fmt.Println("✗", Explained(err))
 		return 1
 	}
+	return 0
+}
+
+// Update installs Whydah's latest release over this copy and returns a
+// process exit code.
+func Update(ctx context.Context, u *selfupdate.Updater) int {
+	if !u.Status().Supported {
+		fmt.Println(T("cli.update_dev"))
+		return 1
+	}
+	if err := u.Check(ctx); err != nil {
+		fmt.Println("✗", Explained(err))
+		return 1
+	}
+	st := u.Status()
+	if !st.Available {
+		fmt.Println(T("cli.update_current", "version", st.Current))
+		return 0
+	}
+	fmt.Println(T("cli.update_installing", "current", st.Current, "latest", st.Latest))
+	if err := u.Install(ctx); err != nil {
+		fmt.Println("✗", Explained(err))
+		return 1
+	}
+	fmt.Println(T("cli.update_done", "latest", st.Latest))
 	return 0
 }
 
 func installed(st tools.Status) map[string]string {
 	gdl := st.GalleryDLVer
 	if release, build, ok := strings.Cut(gdl, ":"); ok {
-		gdl = release + " (build " + build + ")"
+		gdl = T("cli.build", "release", release, "build", build)
 	}
 	return map[string]string{"yt-dlp": st.YtDlpVersion, "gallery-dl": gdl}
 }
@@ -353,13 +373,13 @@ func describe(j engine.Job) string {
 		name = fmt.Sprintf("%d/%d %s", j.Index, j.GroupSize, name)
 	}
 	if j.Kind == "photos" {
-		count := fmt.Sprintf("%d photos", j.Files)
+		count := T("ui.kind_photos", "count", strconv.Itoa(j.Files))
 		if j.FileTotal > 0 {
-			count = fmt.Sprintf("%d/%d photos", j.Files, j.FileTotal)
+			count = T("ui.photos_progress", "count", strconv.Itoa(j.Files), "total", strconv.Itoa(j.FileTotal))
 		}
 		switch j.State {
 		case engine.Queued:
-			return fmt.Sprintf("  [%s] queued", name)
+			return fmt.Sprintf("  [%s] %s", name, T("ui.item_queued"))
 		case engine.Downloading:
 			return fmt.Sprintf("  [%s] %s", name, count)
 		case engine.Done:
@@ -368,22 +388,22 @@ func describe(j engine.Job) string {
 	}
 	switch j.State {
 	case engine.Queued:
-		return fmt.Sprintf("  [%s] queued", name)
+		return fmt.Sprintf("  [%s] %s", name, T("ui.item_queued"))
 	case engine.Downloading:
-		s := fmt.Sprintf("  [%s] %5.1f%%", name, j.Percent)
+		s := fmt.Sprintf("  [%s] %5s %%", name, decimal(j.Percent))
 		if j.Speed > 0 {
-			s += fmt.Sprintf("  %.1f MB/s", j.Speed/1e6)
+			s += "  " + T("ui.per_second", "size", decimal(j.Speed/1e6)+" "+T("ui.unit_mb"))
 		}
 		if j.ETA > 0 {
-			s += fmt.Sprintf("  ETA %ds", j.ETA)
+			s += "  " + T("ui.time_left", "time", T("ui.seconds", "s", strconv.Itoa(j.ETA)))
 		}
 		return s
 	case engine.Processing:
-		return fmt.Sprintf("  [%s] processing…", name)
+		return fmt.Sprintf("  [%s] %s", name, T("ui.processing"))
 	case engine.Done:
 		return fmt.Sprintf("✓ %s", j.FilePath)
 	case engine.Canceled:
-		return fmt.Sprintf("✗ [%s] canceled", name)
+		return fmt.Sprintf("✗ [%s] %s", name, T("ui.item_canceled"))
 	default:
 		if j.Problem != nil {
 			return fmt.Sprintf("✗ [%s] %s", name, problemText(j.Problem))
@@ -394,10 +414,10 @@ func describe(j engine.Job) string {
 
 // streamLine describes a stream the crow's nest caught.
 func streamLine(st engine.Stream) string {
-	parts := []string{map[string]string{"hls": "HLS", "dash": "DASH", "video": "video file", "audio": "audio file"}[st.Kind]}
+	parts := []string{map[string]string{"hls": T("ui.stream_hls"), "dash": T("ui.stream_dash"), "video": T("ui.stream_video"), "audio": T("ui.stream_audio")}[st.Kind]}
 	switch {
 	case st.Live:
-		parts = append(parts, "live")
+		parts = append(parts, T("ui.live"))
 	case st.Duration > 0:
 		parts = append(parts, st.DurationString)
 	}
@@ -407,9 +427,21 @@ func streamLine(st engine.Stream) string {
 	return strings.Join(parts, ", ")
 }
 
-// Lang is the language failures are explained in: Settings' choice, else
-// the system's (LC_ALL, LC_MESSAGES, LANG).
+// Lang is the language the terminal speaks: Settings' choice, else the
+// system's (LC_ALL, LC_MESSAGES, LANG).
 var Lang = i18n.Default
+
+// T is the message key in Lang, with its arguments as name, value pairs.
+func T(key string, args ...string) string { return i18n.New(key, args...).In(Lang) }
+
+// decimal is f to one decimal place, with the comma French and Spanish use.
+func decimal(f float64) string {
+	s := strconv.FormatFloat(f, 'f', 1, 64)
+	if base, _, _ := strings.Cut(Lang, "-"); base == "fr" || base == "es" {
+		s = strings.Replace(s, ".", ",", 1)
+	}
+	return s
+}
 
 // SetLanguage picks Lang from the setting, or the environment if it's "".
 func SetLanguage(setting string) {

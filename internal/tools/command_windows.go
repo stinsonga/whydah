@@ -32,15 +32,17 @@ func Command(ctx context.Context, name string, args ...string) *exec.Cmd {
 	return cmd
 }
 
-// StartOutside starts a program that should outlive Whydah, such as the
-// browser a link opens in: it breaks away from Whydah's job (see joinJob).
-// If a job Whydah was started in doesn't allow that, it starts in the job.
-func StartOutside(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+// StartOutside starts cmd, a program that should outlive Whydah such as
+// the browser a link opens in: it breaks away from Whydah's job (see
+// joinJob). If a job Whydah was started in doesn't allow that, it starts
+// in the job.
+func StartOutside(cmd *exec.Cmd) error {
+	inJob := exec.Command(cmd.Path, cmd.Args[1:]...)
+	inJob.Env, inJob.Dir, inJob.Stdin, inJob.Stdout, inJob.Stderr = cmd.Env, cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createBreakawayFromJob}
 	err := cmd.Start()
 	if errors.Is(err, syscall.ERROR_ACCESS_DENIED) {
-		return exec.Command(name, args...).Start()
+		return inJob.Start()
 	}
 	return err
 }

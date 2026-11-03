@@ -12,6 +12,7 @@ const (
 	ToolsStatus   Type = "tools_status"   // Data: tools.Status
 	LinksProgress Type = "links_progress" // Data: engine.LinksProgress
 	SignInStatus  Type = "signin_status"  // Data: engine.SignInStatus
+	SelfUpdate    Type = "self_update"    // Data: selfupdate.Status
 )
 
 type URLDetectedData struct {

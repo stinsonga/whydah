@@ -29,6 +29,7 @@ import (
 	"whydah/internal/engine"
 	"whydah/internal/events"
 	"whydah/internal/i18n"
+	"whydah/internal/selfupdate"
 	"whydah/internal/tools"
 )
 
@@ -45,9 +46,12 @@ type Server struct {
 	Settings *config.Store
 	Engine   *engine.Engine
 	Tools    *tools.Manager
+	Self     *selfupdate.Updater
 	Hub      *events.Hub
 	Token    string
+	Version  string
 	Quit     func() // called by the UI's Quit button
+	Restart  func() // like Quit, but Whydah starts again: after an update
 
 	port int
 }
@@ -79,7 +83,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	})
 	mux.HandleFunc("GET /api/ping", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, map[string]string{"app": appID}) })
 	mux.HandleFunc("GET /api/state", s.auth(s.state))
-	mux.HandleFunc("GET /api/i18n", s.auth(s.messages))
+	mux.HandleFunc("GET /api/i18n", s.messages) // public, for the page opened without its token
 	mux.HandleFunc("GET /api/events", s.auth(s.events))
 	mux.HandleFunc("POST /api/inspect", s.auth(s.inspect))
 	mux.HandleFunc("POST /api/download", s.auth(s.download))
@@ -102,6 +106,8 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	mux.HandleFunc("GET /api/image", s.auth(s.image))
 	mux.HandleFunc("POST /api/tools/check", s.auth(s.checkUpdate))
 	mux.HandleFunc("POST /api/tools/update", s.auth(s.installUpdate))
+	mux.HandleFunc("POST /api/self-update/check", s.auth(s.checkSelfUpdate))
+	mux.HandleFunc("POST /api/self-update", s.auth(s.installSelfUpdate))
 	mux.HandleFunc("POST /api/quit", s.auth(s.quit))
 
 	srv := &http.Server{Handler: s.checkHost(mux), ReadHeaderTimeout: 10 * time.Second}
@@ -133,16 +139,21 @@ func (s *Server) checkHost(next http.Handler) http.Handler {
 
 func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tok := r.Header.Get("X-Token")
-		if tok == "" {
-			tok = r.URL.Query().Get("t") // EventSource can't set headers
-		}
-		if subtle.ConstantTimeCompare([]byte(tok), []byte(s.Token)) != 1 {
+		if !s.authorized(r) {
 			http.Error(w, "unauthorized: reopen the app to get a fresh link", http.StatusUnauthorized)
 			return
 		}
 		h(w, r)
 	}
+}
+
+// authorized reports whether r carries the UI token.
+func (s *Server) authorized(r *http.Request) bool {
+	tok := r.Header.Get("X-Token")
+	if tok == "" {
+		tok = r.URL.Query().Get("t") // EventSource can't set headers
+	}
+	return subtle.ConstantTimeCompare([]byte(tok), []byte(s.Token)) == 1
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +173,8 @@ type stateResponse struct {
 	VideoQualities    []string            `json:"video_qualities"`
 	UpdateChannels    []string            `json:"update_channels"`
 	SignIn            engine.SignInStatus `json:"signin"`
+	Version           string              `json:"version"`
+	SelfUpdate        selfupdate.Status   `json:"self_update"`
 }
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +189,29 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		UpdateChannels:    config.UpdateChannels,
 		NameTokens:        config.NameTokens,
 		SignIn:            s.Engine.SignInStatus(),
+		Version:           s.Version,
+		SelfUpdate:        s.Self.Status(),
 	})
+}
+
+func (s *Server) checkSelfUpdate(w http.ResponseWriter, r *http.Request) {
+	_ = s.Self.Check(r.Context()) // a failure is in the status
+	writeJSON(w, s.Self.Status())
+}
+
+// installSelfUpdate installs Whydah's latest release in the background and
+// then restarts. Downloads that are running stop and resume after it, as
+// they do after quitting.
+func (s *Server) installSelfUpdate(w http.ResponseWriter, r *http.Request) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+		if s.Self.Install(ctx) == nil && s.Self.Status().State == "restarting" {
+			time.Sleep(500 * time.Millisecond) // let the page hear it's restarting
+			s.Restart()
+		}
+	}()
+	writeJSON(w, s.Self.Status())
 }
 
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
@@ -541,8 +576,11 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("lang") == "" {
 		prefs = strings.Split(r.Header.Get("Accept-Language"), ",")
 	}
-	auto := i18n.Match(prefs...)
-	lang := firstNonEmpty(s.Settings.Get().Language, auto)
+	auto, lang := i18n.Match(prefs...), ""
+	if s.authorized(r) { // the settings are only the app's to share
+		lang = s.Settings.Get().Language
+	}
+	lang = firstNonEmpty(lang, auto)
 	writeJSON(w, map[string]any{"lang": lang, "auto": auto, "languages": i18n.Languages(), "messages": i18n.Messages(lang)})
 }
 

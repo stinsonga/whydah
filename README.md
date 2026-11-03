@@ -19,6 +19,7 @@ whydah salvage URL [URL...]          # download everything at each link, then ex
 whydah URL [URL...]                  # same as salvage
 whydah spyglass URL [URL...]         # show what each link has, without downloading
 whydah refit                         # update yt-dlp and gallery-dl to their latest releases
+whydah update                        # update Whydah itself to its latest release
 
 whydah salvage --audio URL           # audio only (format from settings, default mp3)
 whydah salvage --output ~/Movies URL # download folder for this run
@@ -193,15 +194,22 @@ yt-dlp might fix. What the tool actually said is under **Details**.
 ### Languages
 
 Settings → *Language* follows your browser (in the UI) or system (in the
-terminal) by default. Only English exists so far; the messages live in
-`internal/i18n/locales`, one JSON file per language. To add one, copy
-`en.json` to e.g. `de.json`, translate the values (keep the `{placeholders}`;
-give each `.one`/`.other` key the plural forms the language needs, such as
-`.few`), set `language.name` to the language's own name, and rebuild. Keys
-left out fall back to English, and `go test ./internal/i18n` checks the
-file against the code. So far the failure messages and a few labels use
-the catalog; the rest of the UI is still English text in `index.html`,
-moving over a screen at a time with `t("key")` and `data-t="key"`.
+terminal) by default. Whydah speaks English, French and Spanish, everywhere:
+the UI, the terminal (`--help` included) and the helpers' setup messages.
+The French and Spanish were translated without a native speaker's review;
+corrections are welcome.
+
+The messages live in `internal/i18n/locales`, one JSON file per language.
+To add one, copy `en.json` to e.g. `de.json`, translate the values (keep
+the `{placeholders}`; give each `.one`/`.other` key the plural forms the
+language needs, such as `.few`), set `language.name` to the language's own
+name, and rebuild. Keys left out fall back to English. For a language with
+plural rules of its own, add them to `pluralForm` in
+`internal/i18n/i18n.go` (the UI uses the browser's). `go test
+./internal/i18n` checks every catalog against the code, and fails if the UI
+gains text that isn't from the catalog: in `index.html`, use `t("key")` in
+the script and `data-t`, `data-t-title` or `data-t-placeholder` in the
+markup.
 
 ### Across restarts
 
@@ -249,6 +257,24 @@ Settings → *yt-dlp updates* picks yt-dlp's release channel: stable (default)
 or nightly, which gets site fixes sooner but is occasionally buggy. gallery-dl
 always uses the latest build.
 
+### Keeping Whydah itself current
+
+A release build checks GitHub once a day for a newer Whydah. When there is
+one, the UI shows a banner with **Update and restart**, a link to what's new,
+and **Not now** (which hides it until the release after). Updating downloads
+the release, checks it's signed with Whydah's release key (built in; see
+"Releasing"), puts it in place of the running copy (the whole `Whydah.app`
+on macOS) and restarts. The open page reconnects and reloads. Downloads that
+were running stop and pick up where they left off, as they do after quitting.
+From the terminal: `whydah update`, while the app isn't running. The footer
+shows which version is running.
+
+Whydah has to be able to write where it's installed. If it can't (a copy in a
+folder only an administrator can change, or one macOS runs from a temporary
+read-only location because it was opened straight from Downloads), it says
+so; download the new version from its release page instead. Builds of your
+own with no release key, or not from a GitHub remote, don't update.
+
 ### Where things live
 
 | | macOS | Windows | Linux |
@@ -272,6 +298,7 @@ make dist    # dist/whydah-{darwin,windows,linux}-{arch}
 make vet      # this platform, Windows and Linux
 go test ./...
 make e2e      # end-to-end tests (below)
+make release  # build, sign and publish a release (see "Releasing")
 ```
 
 `make e2e` serves test pages locally (a player in an iframe from another
@@ -299,8 +326,42 @@ make app
 ```
 
 Without the certificate the app is signed ad-hoc, and the permission has to be
-switched off and on again after each build. The certificate is only trusted
-on your Mac; copies for other people need an Apple Developer ID.
+switched off and on again after each build. Releases are signed with the same
+certificate, so the permission carries over between them on other Macs too.
+Other Macs don't trust it, though: the first time someone opens a release
+they downloaded, macOS asks them to allow it in System Settings → Privacy &
+Security (*Open Anyway*). Updates Whydah installs itself don't ask. Getting
+rid of that first prompt needs an Apple Developer ID.
+
+### Releasing
+
+Releases are GitHub releases of this repository (the git remote's; the
+Makefile passes it to the build). Installed copies update themselves from the
+latest one. Once, before the first release:
+
+```sh
+./scripts/make-signing-cert.sh       # if you haven't: signs the macOS builds
+go run ./packaging/release keygen    # the release signing key; commit internal/selfupdate/key.go
+```
+
+`keygen` keeps the private key outside the repository, in your config folder
+(`whydah-release/signing-key`; `WHYDAH_RELEASE_KEY` overrides where). Back
+it up, and the signing certificate too. Releases signed with a different key
+won't install over existing copies, and a new certificate resets macOS
+permissions for everyone.
+
+Then, from a clean, pushed working tree:
+
+```sh
+make release DRY=1   # build and sign into dist/ without publishing, to check
+make release         # tag, push the tag, and publish with gh
+```
+
+The version is the date (`2026.11.02`, then `2026.11.02.2` for a second one
+that day). A release has a build for each platform, `Whydah-macos.zip` (the
+app), `SHA256SUMS` and `SHA256SUMS.sig`, the list's ed25519 signature. Whydah
+only installs a build that's in a list signed with the key built into it, so
+access to the GitHub repository alone isn't enough to push an update.
 
 ### The icon
 
@@ -319,7 +380,9 @@ main.go                 subcommands and flags, wiring, single-instance check, lo
 detach_*.go             starting the server in the background when opened as Whydah.app
 packaging/macos         Info.plist and Whydah.icns for Whydah.app
 packaging/icon          draws the icon in every format (make icon)
-scripts                 make-signing-cert.sh
+restart_*.go            starting again as the new version after an update
+packaging/release       the release signing key: keygen, sign
+scripts                 make-signing-cert.sh, release.sh
 internal/config         settings.json load/save, URL host matching, browser detection
 internal/events         pub/sub hub between engine, clipboard watcher and frontends
 internal/tools          finds/downloads/updates yt-dlp, gallery-dl, ffmpeg, deno, headless Chrome
@@ -331,7 +394,8 @@ internal/engine         inspection and downloads: yt-dlp, gallery-dl, page scan,
                         the saved queue (queue.go)
 internal/clipboard      clipboard polling (Win32 API on Windows, pbpaste/wl-paste/xclip elsewhere)
 internal/web            localhost HTTP + SSE API and the embedded single-file UI
-internal/cli            terminal mode: salvage, spyglass, refit
+internal/cli            terminal mode: salvage, spyglass, refit, update, sign-in
+internal/selfupdate     Whydah's own updates: checks, verifies and installs releases
 internal/i18n           messages in each language (locales/*.json), explained failures
 ```
 
@@ -341,10 +405,11 @@ other websites can't drive it from your browser.
 
 ## Known limitations
 
-- Release binaries aren't code-signed yet. macOS Gatekeeper will block a
-  downloaded copy until you right-click → Open (or run
+- Releases aren't signed with an Apple Developer ID or notarized. macOS
+  blocks a downloaded copy the first time until it's allowed in System
+  Settings → Privacy & Security (or, for the terminal binary,
   `xattr -d com.apple.quarantine whydah`). Windows SmartScreen shows a
-  similar warning.
+  similar warning. Updates Whydah installs itself aren't affected.
 - On a linked page yt-dlp can't read, the crow's nest keeps the first
   stream it sees play, which is now and then a trailer rather than the
   video. Past the first 40 such pages in one check, the rest come back as

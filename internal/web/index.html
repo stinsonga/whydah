@@ -74,6 +74,7 @@
   dialog::backdrop { background: rgba(0,0,0,.35); }
   dialog h3 { margin: 0 0 14px; }
   .field { display: grid; gap: 4px; margin-bottom: 12px; }
+  .field > * { min-width: 0; } /* a long option (in some languages) mustn't widen the dialog */
   .field label { font-size: 13px; color: var(--muted); }
   .check { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
   .row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
@@ -145,44 +146,45 @@
 <main>
   <header>
     <h1><img class="logo" src="/icon.png" alt="" width="28" height="28">Whydah</h1>
-    <button class="link" id="open-folder" type="button" title="Open the download folder">Open the hold</button>
+    <button class="link" id="open-folder" type="button" data-t="ui.open_hold" data-t-title="ui.open_hold_tip">Open the hold</button>
     <button class="link" id="open-history" type="button" data-t="ui.history">History</button>
-    <button class="link" id="open-settings" type="button">Settings</button>
-    <button class="link" id="quit" type="button">Quit</button>
+    <button class="link" id="open-settings" type="button" data-t="ui.settings">Settings</button>
+    <button class="link" id="quit" type="button" data-t="ui.quit">Quit</button>
   </header>
 
   <div id="tools-banner" class="banner" hidden></div>
   <div id="update-banner" class="banner info" hidden></div>
+  <div id="self-banner" class="banner info" hidden></div>
 
   <form class="url" id="url-form">
-    <input id="url-input" type="url" placeholder="Paste a link: video, playlist, gallery or any page with photos" autocomplete="off" required>
-    <button class="primary" type="submit" title="Look up what this link has">Spyglass</button>
+    <input id="url-input" type="url" data-t-placeholder="ui.link_placeholder" autocomplete="off" required>
+    <button class="primary" type="submit" data-t="ui.spyglass" data-t-title="ui.spyglass_tip">Spyglass</button>
   </form>
   <p class="hint" id="clip-hint"></p>
 
   <div id="previews" class="stack"></div>
 
-  <h2>The hold <button class="link" id="clear" type="button">Clear finished</button></h2>
-  <div id="jobs" class="stack"><div class="empty">Nothing yet.</div></div>
+  <h2><span data-t="ui.hold">The hold</span> <button class="link" id="clear" type="button" data-t="ui.clear_finished">Clear finished</button></h2>
+  <div id="jobs" class="stack"></div>
 
   <div class="footer" id="footer"></div>
 </main>
 
 <dialog id="settings">
   <form method="dialog" id="settings-form">
-    <h3>Settings</h3>
+    <h3 data-t="ui.settings">Settings</h3>
     <div class="field"><label for="s-lang" data-t="ui.language">Language</label><select id="s-lang"></select></div>
-    <div class="field"><label for="s-out">Download folder</label><input id="s-out" required></div>
-    <div class="field"><label for="s-quality">Video quality</label><select id="s-quality"></select></div>
-    <label class="check"><input type="checkbox" id="s-compat"> Prefer MP4 / H.264 (plays everywhere; caps most sites at 1080p)</label>
-    <div class="field"><label for="s-audio">Audio format</label><select id="s-audio"></select></div>
+    <div class="field"><label for="s-out" data-t="ui.download_folder">Download folder</label><input id="s-out" required></div>
+    <div class="field"><label for="s-quality" data-t="ui.video_quality">Video quality</label><select id="s-quality"></select></div>
+    <label class="check"><input type="checkbox" id="s-compat"> <span data-t="ui.compat">Prefer MP4 / H.264 (plays everywhere; caps most sites at 1080p)</span></label>
+    <div class="field"><label for="s-audio" data-t="ui.audio_format">Audio format</label><select id="s-audio"></select></div>
     <div class="field">
       <label for="s-names" data-t="ui.names">File names</label>
       <input id="s-names" autocomplete="off" spellcheck="false">
       <div class="example" id="s-names-example"></div>
     </div>
     <div class="field">
-      <label for="s-browser">Use cookies from browser (for age-restricted, members-only or private posts)</label>
+      <label for="s-browser" data-t="ui.cookies_from">Use cookies from browser (for age-restricted, members-only or private posts)</label>
       <select id="s-browser"></select>
       <div id="s-signin" hidden>
         <div class="example" id="s-signin-hint"></div>
@@ -194,14 +196,14 @@
         <div class="error-text" id="s-signin-error"></div>
       </div>
     </div>
-    <div class="field"><label for="s-conc">Simultaneous downloads</label><input id="s-conc" type="number" min="1" max="8"></div>
-    <label class="check"><input type="checkbox" id="s-clip"> Watch clipboard for links</label>
-    <div class="field"><label for="s-hosts">Sites to watch for (comma separated)</label><input id="s-hosts"></div>
+    <div class="field"><label for="s-conc" data-t="ui.simultaneous">Simultaneous downloads</label><input id="s-conc" type="number" min="1" max="8"></div>
+    <label class="check"><input type="checkbox" id="s-clip"> <span data-t="ui.watch_clipboard">Watch clipboard for links</span></label>
+    <div class="field"><label for="s-hosts" data-t="ui.watch_sites">Sites to watch for (comma separated)</label><input id="s-hosts"></div>
     <div class="field">
-      <label for="s-channel">yt-dlp updates (gallery-dl always uses its latest build)</label>
+      <label for="s-channel" data-t="ui.channel">yt-dlp updates (gallery-dl always uses its latest build)</label>
       <select id="s-channel">
-        <option value="stable">Stable releases</option>
-        <option value="nightly">Nightly builds (site fixes sooner, occasionally buggy)</option>
+        <option value="stable" data-t="ui.channel_stable">Stable releases</option>
+        <option value="nightly" data-t="ui.channel_nightly">Nightly builds (site fixes sooner, occasionally buggy)</option>
       </select>
     </div>
     <div class="field">
@@ -211,8 +213,8 @@
     </div>
     <div class="error-text" id="s-error"></div>
     <div class="row-end">
-      <button type="button" id="s-cancel">Cancel</button>
-      <button class="primary" type="submit" id="s-save">Save</button>
+      <button type="button" id="s-cancel" data-t="ui.cancel">Cancel</button>
+      <button class="primary" type="submit" id="s-save" data-t="ui.save">Save</button>
     </div>
   </form>
 </dialog>
@@ -248,15 +250,18 @@ async function api(path, { method = "GET", body } = {}) {
 // ---- language ----
 // Messages come from the app (internal/i18n/locales), in the language set in
 // Settings or else the browser's. t(key, args) fills in {name}; with a count
-// argument it picks the key's plural form by the language's rules. Text in
-// the page itself is moved over to keys gradually: so far, failures and the
-// elements marked data-t.
+// argument it picks the key's plural form by the language's rules. All the
+// page's text is in the catalog: what's built here calls t(), and elements
+// marked data-t (their text), data-t-title and data-t-placeholder are filled
+// in by loadMessages.
 const i18n = { lang: "en", auto: "en", languages: [], messages: {} };
 
 async function loadMessages() {
   Object.assign(i18n, await api(`/api/i18n?lang=${encodeURIComponent(navigator.languages.join(","))}`));
   document.documentElement.lang = i18n.lang;
   for (const n of document.querySelectorAll("[data-t]")) n.textContent = t(n.dataset.t);
+  for (const n of document.querySelectorAll("[data-t-title]")) n.title = t(n.dataset.tTitle);
+  for (const n of document.querySelectorAll("[data-t-placeholder]")) n.placeholder = t(n.dataset.tPlaceholder);
 }
 
 function t(key, args = {}) {
@@ -303,13 +308,13 @@ function lightbox(items, start) {
   const btn = (cls, label, text, onclick) => el("button", { class: `lb-btn ${cls}`, type: "button", "aria-label": label,
     onclick: (ev) => { ev.stopPropagation(); onclick(); } }, text);
   const step = (d) => { if (items[i + d]) { i += d; show(); } };
-  const prev = btn("lb-prev", "Previous", "‹", () => step(-1));
-  const next = btn("lb-next", "Next", "›", () => step(1));
-  const closeBtn = btn("lb-close", "Close", "×", () => close());
+  const prev = btn("lb-prev", t("ui.previous"), "‹", () => step(-1));
+  const next = btn("lb-next", t("ui.next"), "›", () => step(1));
+  const closeBtn = btn("lb-close", t("ui.close"), "×", () => close());
   const show = () => {
     const it = items[i];
     img.src = it.src; img.alt = it.title || "";
-    cap.replaceChildren(it.title || "", el("span", {}, [it.detail, items.length > 1 && `${i + 1} of ${items.length}`].filter(Boolean).map((t) => `  ·  ${t}`).join("")));
+    cap.replaceChildren(it.title || "", el("span", {}, [it.detail, items.length > 1 && t("ui.n_of_total", { index: i + 1, total: items.length })].filter(Boolean).map((s) => `  ·  ${s}`).join("")));
     prev.disabled = i === 0; next.disabled = i === items.length - 1;
     prev.hidden = next.hidden = items.length < 2;
   };
@@ -321,7 +326,7 @@ function lightbox(items, start) {
     ev.preventDefault();
   };
   const back = document.activeElement;
-  const box = el("div", { class: "lightbox", role: "dialog", "aria-modal": "true", "aria-label": "Enlarged image",
+  const box = el("div", { class: "lightbox", role: "dialog", "aria-modal": "true", "aria-label": t("ui.enlarged_image"),
     onclick: (ev) => { if (ev.target === box || ev.target === cap) close(); } }, img, cap, prev, next, closeBtn);
   function close() { box.remove(); document.removeEventListener("keydown", onKey); if (back) back.focus(); }
   document.body.append(box);
@@ -352,21 +357,24 @@ function thumb(src, page) {
 
 const fmtBytes = (n) => {
   if (!n) return "";
-  const u = ["B", "KB", "MB", "GB"]; let i = 0;
+  const u = [t("ui.unit_b"), t("ui.unit_kb"), t("ui.unit_mb"), t("ui.unit_gb")]; let i = 0;
   while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-  return `${n.toFixed(i > 1 ? 1 : 0)} ${u[i]}`;
+  const digits = i > 1 ? 1 : 0;
+  return `${n.toLocaleString(i18n.lang, { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${u[i]}`;
 };
-const fmtEta = (s) => s > 0 ? (s >= 3600 ? `${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m` : s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`) : "";
+const fmtEta = (s) => s > 0 ? (s >= 3600 ? t("ui.hours_minutes", { h: Math.floor(s/3600), m: Math.floor(s%3600/60) })
+  : s >= 60 ? t("ui.minutes_seconds", { m: Math.floor(s/60), s: s%60 }) : t("ui.seconds", { s })) : "";
+const fmtPercent = (p) => (Math.floor(p) / 100).toLocaleString(i18n.lang, { style: "percent" });
 
 // ---- tools banner ----
 function renderTools() {
-  const t = state.tools, b = $("tools-banner");
-  if (!t) return;
-  b.replaceChildren(); b.classList.toggle("error", !!t.error);
-  if (t.error) b.append(`Setup failed: ${t.error}`);
-  else if (!t.ready || t.stage) b.append(t.stage || "Getting things ready…"); // also e.g. fetching headless Chrome later
-  if (t.warnings && t.warnings.length) b.append(el("ul", {}, t.warnings.map((w) => el("li", {}, w))));
-  b.hidden = t.ready && !t.stage && !t.error && !(t.warnings && t.warnings.length);
+  const tools = state.tools, b = $("tools-banner");
+  if (!tools) return;
+  b.replaceChildren(); b.classList.toggle("error", !!tools.error);
+  if (tools.error) b.append(problemView(tools.error));
+  else if (!tools.ready || tools.stage) b.append(tools.stage ? problemText(tools.stage) : t("ui.getting_ready")); // also e.g. fetching headless Chrome later
+  if (tools.warnings && tools.warnings.length) b.append(el("ul", {}, tools.warnings.map((w) => el("li", {}, problemView(w)))));
+  b.hidden = tools.ready && !tools.stage && !tools.error && !(tools.warnings && tools.warnings.length);
   renderUpdate();
 }
 
@@ -396,54 +404,96 @@ const notToolFaults = new Set(["error.not_found", "error.geo_blocked", "error.pr
 function updateHint(problem) {
   const u = state.tools && state.tools.update;
   if (!u || !u.available || (problem && notToolFaults.has(problem.key))) return null;
-  return el("div", { class: "hint-update" }, "Newer tools are available and may fix this.",
-    el("button", { type: "button", onclick: installUpdate, title: "Update the helper tools" }, "Refit"));
+  return el("div", { class: "hint-update" }, t("ui.update_may_fix"),
+    el("button", { type: "button", onclick: installUpdate, title: t("ui.refit_tip") }, t("ui.refit")));
 }
 
 function renderUpdate() {
-  const t = state.tools, b = $("update-banner"), f = $("footer");
-  const u = t && t.update;
+  const tools = state.tools, b = $("update-banner"), f = $("footer");
+  const u = tools && tools.update;
   f.replaceChildren();
-  if (!t || !t.yt_dlp_version) { b.hidden = true; return; }
+  if (!tools || !tools.yt_dlp_version) { b.hidden = true; renderSelfUpdate(); return; }
 
   // Footer: versions, channel, and a manual check.
-  f.append(`yt-dlp ${t.yt_dlp_version}`);
+  if (meta.version) f.append(`${t("ui.whydah_version", { version: meta.version })} · `);
+  f.append(`yt-dlp ${tools.yt_dlp_version}`);
   if (u.supported) f.append(` (${u.channel || state.settings?.update_channel || "stable"})`);
-  if (t.gallery_dl_version) f.append(` · gallery-dl ${gdlRelease(t.gallery_dl_version)}`);
-  if (t.headless_version) f.append(` · headless Chrome ${t.headless_version}`);
-  else if (t.browser) f.append(` · crow's nest: ${t.browser}`);
+  if (tools.gallery_dl_version) f.append(` · gallery-dl ${gdlRelease(tools.gallery_dl_version)}`);
+  if (tools.headless_version) f.append(` · headless Chrome ${tools.headless_version}`);
+  else if (tools.browser) f.append(` · ${t("ui.footer_crows_nest", { browser: tools.browser })}`);
   if (u.supported) {
     f.append(" · ");
-    if (u.state === "checking") f.append("checking for updates…");
-    else if (u.state) f.append("refitting…");
+    if (u.state === "checking") f.append(t("ui.checking_updates"));
+    else if (u.state) f.append(t("ui.refitting"));
     else {
-      if (u.check_error) f.append("couldn't check for updates · ");
-      else if (u.checked_at && !u.available && !u.checked_at.startsWith("0001")) f.append("up to date · ");
-      f.append(el("button", { class: "link", type: "button", onclick: () => api("/api/tools/check", { method: "POST" }).then((s) => { state.tools = s; renderTools(); renderJobs(); }).catch((e) => alert(e.message)) }, "Check for updates"));
+      if (u.check_error) f.append(`${t("ui.check_failed")} · `);
+      else if (u.checked_at && !u.available && !u.checked_at.startsWith("0001")) f.append(`${t("ui.up_to_date")} · `);
+      f.append(el("button", { class: "link", type: "button", onclick: checkAll }, t("ui.check_updates")));
     }
   }
 
   // Banner: in-progress, failure, success, or available (unless dismissed for these versions).
   const btn = (label, onclick, cls) => el("button", { type: "button", class: cls, onclick }, label);
   let content = null;
-  if (u.state === "waiting") content = ["Refitting once the current downloads finish…"];
-  else if (u.state === "installing") content = ["Refitting: updating yt-dlp and gallery-dl…", el("div", { class: "bar indeterminate" }, el("div"))];
-  else if (u.error) content = [`Refit failed: ${u.error}`, el("div", { class: "actions" }, btn("Try again", installUpdate))];
+  if (u.state === "waiting") content = [t("ui.refit_waiting")];
+  else if (u.state === "installing") content = [t("ui.refit_installing"), el("div", { class: "bar indeterminate" }, el("div"))];
+  else if (u.error) content = [problemView(u.error), el("div", { class: "actions" }, btn(t("ui.try_again"), installUpdate))];
   else if (u.installed && u.installed !== seenInstalled) {
     // Offer to retry failures rather than doing it automatically: some (private
     // videos, region blocks) won't be fixed by an update and would just fail again.
     const failed = [...state.jobs.values()].filter((j) => j.state === "error");
     const ack = () => { seenInstalled = u.installed; renderUpdate(); };
     const retryAll = () => { failed.forEach((j) => post(`/api/jobs/${j.id}/retry`)); ack(); };
-    content = [`Refit complete: ${u.installed}.` + (failed.length ? " Downloads that failed before may work now." : ""),
+    content = [t("ui.refit_done", { versions: u.installed }) + (failed.length ? " " + t("ui.refit_may_work") : ""),
       el("div", { class: "actions" },
-        failed.length ? btn(`Retry ${failed.length} failed download${failed.length === 1 ? "" : "s"}`, retryAll, "primary") : null,
-        btn(failed.length ? "Not now" : "OK", ack))];
+        failed.length ? btn(t("ui.retry_n_failed", { count: failed.length }), retryAll, "primary") : null,
+        btn(failed.length ? t("ui.not_now") : t("ui.ok"), ack))];
   } else if (u.available && store.get(dismissKey) !== pendingKey(u)) {
-    content = [`Newer tools are available (${pendingText(u)}). Sites change often, and a refit fixes downloads that stop working.`,
+    content = [t("ui.update_available", { pending: pendingText(u) }),
       el("div", { class: "actions" },
-        btn("Refit now", installUpdate, "primary"),
-        btn("Not now", () => { store.set(dismissKey, pendingKey(u)); renderUpdate(); }))];
+        btn(t("ui.refit_now"), installUpdate, "primary"),
+        btn(t("ui.not_now"), () => { store.set(dismissKey, pendingKey(u)); renderUpdate(); }))];
+  }
+  b.replaceChildren(...(content || []));
+  b.hidden = !content;
+  renderSelfUpdate();
+}
+
+// checkAll looks for new releases of the tools and of Whydah itself.
+function checkAll() {
+  Promise.all([
+    api("/api/tools/check", { method: "POST" }).then((s) => { state.tools = s; }),
+    api("/api/self-update/check", { method: "POST" }).then((s) => { state.self = s; }),
+  ]).then(() => { renderTools(); renderJobs(); }).catch((e) => alert(e.message));
+}
+
+// ---- Whydah's own updates ----
+// The server checks daily for a new release; installing happens when asked,
+// and Whydah restarts as the new version. The page reloads when it sees a
+// different version (loadState).
+const selfDismissKey = "wd.dismissedSelfUpdate";
+
+function installSelfUpdate() {
+  api("/api/self-update", { method: "POST" }).then((s) => { state.self = s; renderSelfUpdate(); }).catch((e) => alert(e.message));
+}
+
+function renderSelfUpdate() {
+  const u = state.self, b = $("self-banner");
+  const btn = (label, onclick, cls) => el("button", { type: "button", class: cls, onclick }, label);
+  const notes = () => btn(t("ui.selfupdate_notes"), () => window.open(u.release_url, "_blank", "noopener"), "link");
+  let content = null;
+  if (u && u.supported) {
+    if (u.state === "installing" || u.state === "restarting") {
+      content = [u.state === "installing" ? t("ui.selfupdate_installing") : t("ui.selfupdate_restarting"), el("div", { class: "bar indeterminate" }, el("div"))];
+    } else if (u.error) {
+      content = [problemView(u.error), el("div", { class: "actions" }, btn(t("ui.try_again"), installSelfUpdate), u.release_url ? notes() : null)];
+    } else if (u.available && store.get(selfDismissKey) !== u.latest) {
+      const running = [...state.jobs.values()].some((j) => j.state === "downloading" || j.state === "processing");
+      content = [t("ui.selfupdate_available", { latest: u.latest, current: u.current }) + (running ? " " + t("ui.selfupdate_resume") : ""),
+        el("div", { class: "actions" },
+          btn(t("ui.selfupdate_install"), installSelfUpdate, "primary"), notes(),
+          btn(t("ui.not_now"), () => { store.set(selfDismissKey, u.latest); renderSelfUpdate(); }))];
+    }
   }
   b.replaceChildren(...(content || []));
   b.hidden = !content;
@@ -498,19 +548,17 @@ function linksProgress(d) {
   if (!p || p.status !== "loading") return;
   p.done = d.done;
   if (p.bar) p.bar.style.width = `${(100 * d.done / Math.max(d.total, 1)).toFixed(0)}%`;
-  if (p.count) p.count.textContent = `${d.done} of ${d.total} checked`;
+  if (p.count) p.count.textContent = t("ui.links_checked", { done: d.done, total: d.total });
 }
 
 const linkedBtn = (url, md, cls) => el("button", { class: cls, type: "button", onclick: () => checkLinks(url, md),
-  title: "Check the pages these thumbnails lead to, and list the videos on them" }, `${plural(md.links.length, "linked video")}…`);
+  title: t("ui.linked_tip") }, t("ui.linked_videos", { count: md.links.length }));
 
-const crowsNestTip = "Load the page in a hidden browser and scroll through it, to find photos its scripts add and catch the streams its player plays. Takes 5–30 seconds.";
-const crowsNestBtn = (url, cls) => el("button", { class: cls, type: "button", onclick: () => inspect(url, "crow"), title: crowsNestTip }, "Crow's nest");
+const crowsNestBtn = (url, cls) => el("button", { class: cls, type: "button", onclick: () => inspect(url, "crow"), title: t("ui.crows_nest_tip") }, t("ui.crows_nest"));
 
 function dismiss(key) { state.previews.delete(key); renderPreviews(); }
 
 const audioLabel = () => (state.settings ? state.settings.audio_format : "mp3");
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 async function startDownload(key, audio) {
   const p = state.previews.get(key), md = p.md;
@@ -530,8 +578,8 @@ async function startStream(key, st, audio) {
   } catch (e) { alert(e.message); }
 }
 
-const streamKinds = { hls: "HLS stream", dash: "DASH stream", video: "Video file", audio: "Audio file" };
-const streamMeta = (st) => [streamKinds[st.kind], st.live ? "live" : st.duration ? st.duration_string : "",
+const streamKind = (kind) => ({ hls: t("ui.stream_hls"), dash: t("ui.stream_dash"), video: t("ui.stream_video"), audio: t("ui.stream_audio") })[kind];
+const streamMeta = (st) => [streamKind(st.kind), st.live ? t("ui.live") : st.duration ? st.duration_string : "",
   st.height ? `${st.height}p` : "", st.filesize ? `~${fmtBytes(st.filesize)}` : ""].filter(Boolean).join(" · ");
 
 // streamsBtn opens a result's streams as a card of their own, next to its photos or linked videos.
@@ -541,7 +589,7 @@ const streamsBtn = (url, md, cls) => el("button", { class: cls, type: "button",
     if (state.previews.has(key)) return;
     state.previews.set(key, { status: "ready", url, mode: "streams", md: { ...md, kind: "streams" } });
     renderPreviews();
-  }, title: "Video or audio the page's player loaded" }, `▶ ${plural(md.streams.length, "stream")}…`);
+  }, title: t("ui.streams_tip") }, t("ui.streams_button", { count: md.streams.length }));
 
 // photosBtn opens a streams result's photos (its poster, say) as a photo card.
 const photosBtn = (url, md) => el("button", { class: "link", type: "button",
@@ -551,34 +599,34 @@ const photosBtn = (url, md) => el("button", { class: "link", type: "button",
     state.previews.set(key, { status: "ready", url, mode: "photos", photos: true, md: { ...md, kind: "photos" },
       selected: new Set(md.photos.map((ph) => ph.index)), expanded: true });
     renderPreviews();
-  } }, `${plural(md.photos.length, "photo")}…`);
+  } }, t("ui.photos_button", { count: md.photos.length }));
 
 function streamsCard(key, p) {
   const md = p.md, streams = md.streams, first = streams[0];
   const isAudio = (st) => st.kind === "audio";
   const buttons = (st, cls) => [
-    isAudio(st) ? null : el("button", { class: cls, type: "button", onclick: () => startStream(key, st, false) }, "Salvage video"),
-    el("button", { class: isAudio(st) ? cls : "", type: "button", onclick: () => startStream(key, st, true) }, `Salvage audio (${audioLabel()})`)];
-  const dismissBtn = el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss");
+    isAudio(st) ? null : el("button", { class: cls, type: "button", onclick: () => startStream(key, st, false) }, t("ui.salvage_video")),
+    el("button", { class: isAudio(st) ? cls : "", type: "button", onclick: () => startStream(key, st, true) }, t("ui.salvage_audio", { format: audioLabel() }))];
+  const dismissBtn = el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, t("ui.dismiss"));
   const more = [md.photos && md.photos.length ? photosBtn(p.url, md) : null,
     md.links && md.links.length ? linkedBtn(p.url, md, "link") : null];
   if (streams.length === 1) {
     return el("div", { class: "card preview" }, thumb(first.thumbnail || md.thumbnail),
       el("div", {},
         el("div", { class: "title" }, first.title || md.title || p.url),
-        el("div", { class: "meta" }, streamMeta(first), " · caught by the crow's nest"),
+        el("div", { class: "meta" }, streamMeta(first), " · ", t("ui.caught")),
         el("div", { class: "actions" }, ...buttons(first, "primary"), ...more, dismissBtn)));
   }
   const list = el("div", { class: "items" }, streams.map((st, i) =>
     el("div", { class: "item no-check" },
       el("span", { class: "num" }, i + 1),
       el("span", { class: "name", title: st.url }, streamMeta(st)),
-      el("span", { class: "status", title: st.referer ? `played on ${st.referer}` : "" }, new URL(st.url).hostname),
+      el("span", { class: "status", title: st.referer ? t("ui.played_on", { page: st.referer }) : "" }, new URL(st.url).hostname),
       el("span", {}, ...buttons(st, "")))));
   return el("div", { class: "card preview" }, thumb(first.thumbnail || md.thumbnail),
     el("div", {},
       el("div", { class: "title" }, md.title || p.url),
-      el("div", { class: "meta" }, `${plural(streams.length, "stream")} caught by the crow's nest. The first is usually the main one.`),
+      el("div", { class: "meta" }, t("ui.streams_caught", { count: streams.length })),
       el("div", { class: "actions" }, ...buttons(first, "primary"), ...more, dismissBtn)),
     list);
 }
@@ -611,29 +659,29 @@ function previewCard(key, p) {
   const url = p.url;
   if (p.status === "loading" && p.mode === "links") {
     p.bar = el("div", { style: "width: 0%" });
-    p.count = el("span", {}, `0 of ${p.links.length} checked`);
+    p.count = el("span", {}, t("ui.links_checked", { done: 0, total: p.links.length }));
     return el("div", { class: "card preview" }, thumb(),
-      el("div", {}, el("div", { class: "title" }, `Checking ${plural(p.links.length, "linked page")} for videos…`),
+      el("div", {}, el("div", { class: "title" }, t("ui.checking_links", { count: p.links.length })),
         el("div", { class: "meta" }, p.title || url, " · ", p.count),
         el("div", { class: "bar" }, p.bar),
-        el("div", { class: "actions" }, el("button", { type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
+        el("div", { class: "actions" }, el("button", { type: "button", onclick: () => dismiss(key) }, t("ui.dismiss")))));
   }
   if (p.status === "loading") {
     return el("div", { class: "card preview" }, thumb(),
-      el("div", {}, el("div", { class: "title" }, p.mode === "crow" ? "Up in the crow's nest…" : p.photos ? "Looking for photos…" : "Looking through the spyglass…"),
-        el("div", { class: "meta" }, p.mode === "crow" ? `Loading ${url} in a hidden browser` : url),
+      el("div", {}, el("div", { class: "title" }, p.mode === "crow" ? t("ui.looking_crow") : p.photos ? t("ui.looking_photos") : t("ui.looking")),
+        el("div", { class: "meta" }, p.mode === "crow" ? t("ui.loading_hidden", { url }) : url),
         signInWaiting() ? el("div", { class: "meta" }, t("ui.signin_waiting")) : null,
         el("div", { class: "bar indeterminate" }, el("div")),
-        el("div", { class: "actions" }, el("button", { type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
+        el("div", { class: "actions" }, el("button", { type: "button", onclick: () => dismiss(key) }, t("ui.dismiss")))));
   }
   if (p.status === "error") {
     return el("div", { class: "card" },
       el("div", { class: "meta" }, url), problemView(p.problem, p.error), signInHint(p.problem, url), updateHint(p.problem),
       el("div", { class: "actions" },
         el("button", { type: "button", onclick: () => { dismiss(key); p.mode === "links" ? checkLinks(url, { links: p.links, title: p.title }) : inspect(url, p.mode); } }, t("ui.retry")),
-        p.photos ? null : el("button", { type: "button", onclick: () => { dismiss(key); inspect(url, "photos"); }, title: "Look for photos on this page instead" }, "Photos on this page…"),
+        p.photos ? null : el("button", { type: "button", onclick: () => { dismiss(key); inspect(url, "photos"); }, title: t("ui.photos_instead_tip") }, t("ui.photos_instead")),
         p.mode === "crow" ? null : crowsNestBtn(url),
-        el("button", { type: "button", onclick: () => dismiss(key) }, "Dismiss")));
+        el("button", { type: "button", onclick: () => dismiss(key) }, t("ui.dismiss"))));
   }
   const md = p.md;
   if (md.kind === "playlist") return playlistCard(key, p);
@@ -644,12 +692,12 @@ function previewCard(key, p) {
     return el("div", { class: "card preview" }, thumb(md.links[0] && md.links[0].thumb),
       el("div", {},
         el("div", { class: "title" }, md.title || url),
-        el("div", { class: "meta" }, `Thumbnails linking to ${plural(md.links.length, "possible video")}`, shown ? ": " + shown : ""),
+        el("div", { class: "meta" }, shown ? t("ui.with_examples", { what: t("ui.links_found", { count: md.links.length }), examples: shown }) : t("ui.links_found", { count: md.links.length })),
         el("div", { class: "actions" },
-          el("button", { class: "primary", type: "button", onclick: () => { dismiss(key); checkLinks(url, md); } }, `Check ${plural(md.links.length, "linked page")}`),
+          el("button", { class: "primary", type: "button", onclick: () => { dismiss(key); checkLinks(url, md); } }, t("ui.check_links", { count: md.links.length })),
           md.streams && md.streams.length ? streamsBtn(url, md, "link") : null,
           md.source === "browser" ? null : crowsNestBtn(url, "link"),
-          el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
+          el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, t("ui.dismiss")))));
   }
   const meta = [md.uploader, md.duration_string !== "Unknown" && md.duration_string, md.filesize_approx && `~${fmtBytes(md.filesize_approx)}`].filter(Boolean).join(" · ");
   return el("div", { class: "card preview" }, thumb(md.thumbnail),
@@ -657,11 +705,11 @@ function previewCard(key, p) {
       el("div", { class: "title" }, md.title || url),
       el("div", { class: "meta" }, meta),
       el("div", { class: "actions" },
-        el("button", { class: "primary", type: "button", onclick: () => startDownload(key, false) }, "Salvage video"),
-        el("button", { type: "button", onclick: () => startDownload(key, true) }, `Salvage audio (${audioLabel()})`),
-        md.playlist_url ? el("button", { type: "button", onclick: () => inspect(md.playlist_url) }, "Whole playlist…") : null,
-        el("button", { class: "link", type: "button", onclick: () => inspect(url, "photos"), title: "Look for photos on this page instead" }, "Photos on this page…"),
-        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss"))));
+        el("button", { class: "primary", type: "button", onclick: () => startDownload(key, false) }, t("ui.salvage_video")),
+        el("button", { type: "button", onclick: () => startDownload(key, true) }, t("ui.salvage_audio", { format: audioLabel() })),
+        md.playlist_url ? el("button", { type: "button", onclick: () => inspect(md.playlist_url) }, t("ui.whole_playlist")) : null,
+        el("button", { class: "link", type: "button", onclick: () => inspect(url, "photos"), title: t("ui.photos_instead_tip") }, t("ui.photos_instead")),
+        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, t("ui.dismiss")))));
 }
 
 function playlistCard(key, p) {
@@ -671,11 +719,11 @@ function playlistCard(key, p) {
   const chooseBtn = el("button", { class: "link", type: "button" });
   const checks = [];
   const refresh = () => {
-    const k = p.selected.size, what = k === n ? `all ${n}` : `${k} of ${n}`;
-    videoBtn.textContent = `Salvage ${what}`;
-    audioBtn.textContent = `Salvage audio (${audioLabel()})`;
+    const k = p.selected.size;
+    videoBtn.textContent = k === n ? t("ui.salvage_all", { count: n }) : t("ui.salvage_some", { count: k, total: n });
+    audioBtn.textContent = t("ui.salvage_audio", { format: audioLabel() });
     videoBtn.disabled = audioBtn.disabled = k === 0;
-    chooseBtn.textContent = p.expanded ? "Hide items" : "Choose items…";
+    chooseBtn.textContent = p.expanded ? t("ui.hide_items") : t("ui.choose_items");
     list.hidden = !p.expanded;
   };
   const setAll = (on) => {
@@ -689,14 +737,14 @@ function playlistCard(key, p) {
   const rowThumb = (e) => {
     if (!e.thumbnail) return el("span", { class: "row-thumb" });
     const img = el("img", { class: "row-thumb", alt: "", loading: "lazy", referrerpolicy: "no-referrer", src: imgSrc(e.thumbnail, e.page || md.url),
-      title: "Enlarge", onclick: enlarge(big, withThumbs.indexOf(e)) });
+      title: t("ui.enlarge"), onclick: enlarge(big, withThumbs.indexOf(e)) });
     img.addEventListener("error", () => img.replaceWith(el("span", { class: "row-thumb" })));
     return img;
   };
   const list = el("div", { class: "items" },
-    el("div", { class: "items-head" }, "Select",
-      el("button", { class: "link", type: "button", onclick: () => setAll(true) }, "all"),
-      el("button", { class: "link", type: "button", onclick: () => setAll(false) }, "none")),
+    el("div", { class: "items-head" }, t("ui.select"),
+      el("button", { class: "link", type: "button", onclick: () => setAll(true) }, t("ui.select_all")),
+      el("button", { class: "link", type: "button", onclick: () => setAll(false) }, t("ui.select_none"))),
     md.entries.map((e) => {
       const cb = el("input", { type: "checkbox", checked: p.selected.has(e.index), "aria-label": e.title });
       cb.addEventListener("change", () => { cb.checked ? p.selected.add(e.index) : p.selected.delete(e.index); refresh(); });
@@ -709,13 +757,13 @@ function playlistCard(key, p) {
     }));
   chooseBtn.addEventListener("click", () => { p.expanded = !p.expanded; refresh(); });
   refresh();
-  const meta = [md.uploader, plural(n, "item")].filter(Boolean).join(" · ");
+  const meta = [md.uploader, t("ui.items", { count: n })].filter(Boolean).join(" · ");
   return el("div", { class: "card preview" }, thumb(md.thumbnail),
     el("div", {},
       el("div", { class: "title" }, md.title || p.url),
-      el("div", { class: "meta" }, md.source === "links" ? "Videos linked from this page · " : "Playlist · ", meta),
+      el("div", { class: "meta" }, (md.source === "links" ? t("ui.linked_from_page") : t("ui.playlist")) + " · ", meta),
       el("div", { class: "actions" }, videoBtn, audioBtn, chooseBtn,
-        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss"))),
+        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, t("ui.dismiss")))),
     list);
 }
 
@@ -727,9 +775,9 @@ function photosCard(key, p) {
   const tiles = [];
   const refresh = () => {
     const k = p.selected.size;
-    saveBtn.textContent = k === n ? `Salvage all ${md.truncated ? n + "+" : n}` : `Salvage ${k} of ${n}`;
+    saveBtn.textContent = k === n ? t("ui.salvage_all", { count: md.truncated ? `${n}+` : n }) : t("ui.salvage_some", { count: k, total: n });
     saveBtn.disabled = k === 0;
-    chooseBtn.textContent = p.expanded ? "Hide photos" : "Choose photos…";
+    chooseBtn.textContent = p.expanded ? t("ui.hide_photos") : t("ui.choose_photos");
     picker.hidden = !p.expanded;
   };
   const setOne = (ph, tile, on) => {
@@ -739,38 +787,38 @@ function photosCard(key, p) {
   };
   const setAll = (on) => { md.photos.forEach((ph, i) => setOne(ph, tiles[i], on)); refresh(); };
   const stills = md.photos.filter((ph) => !ph.video);
-  const big = stills.map((ph) => ({ src: imgSrc(ph.url, page), title: ph.name || `Photo ${ph.index}`, detail: ph.width ? `${ph.width}×${ph.height}` : "" }));
+  const big = stills.map((ph) => ({ src: imgSrc(ph.url, page), title: ph.name || t("ui.photo_n", { index: ph.index }), detail: ph.width ? `${ph.width}×${ph.height}` : "" }));
   const grid = el("div", { class: "photo-grid" }, md.photos.map((ph) => {
-    const cb = el("input", { type: "checkbox", checked: p.selected.has(ph.index), "aria-label": ph.name || `Photo ${ph.index}` });
+    const cb = el("input", { type: "checkbox", checked: p.selected.has(ph.index), "aria-label": ph.name || t("ui.photo_n", { index: ph.index }) });
     const caption = [ph.index, ph.width ? `${ph.width}×${ph.height}` : ""].filter(Boolean).join(" · ");
     const tile = el("label", { class: "tile" + (p.selected.has(ph.index) ? " on" : ""), title: ph.name || ph.url },
-      ph.video ? el("span", { class: "video" }, "▶ video") : thumb(ph.thumb || ph.url, page), cb,
-      ph.video ? null : el("button", { class: "zoom", type: "button", "aria-label": "Enlarge", title: "Enlarge", onclick: enlarge(big, stills.indexOf(ph)) }, "⤢"),
+      ph.video ? el("span", { class: "video" }, t("ui.video_tile")) : thumb(ph.thumb || ph.url, page), cb,
+      ph.video ? null : el("button", { class: "zoom", type: "button", "aria-label": t("ui.enlarge"), title: t("ui.enlarge"), onclick: enlarge(big, stills.indexOf(ph)) }, "⤢"),
       el("span", { class: "cap" }, caption));
     cb.addEventListener("change", () => { setOne(ph, tile, cb.checked); refresh(); });
     tiles.push(tile);
     return tile;
   }));
   const picker = el("div", { class: "photos" },
-    el("div", { class: "items-head" }, "Select",
-      el("button", { class: "link", type: "button", onclick: () => setAll(true) }, "all"),
-      el("button", { class: "link", type: "button", onclick: () => setAll(false) }, "none")),
+    el("div", { class: "items-head" }, t("ui.select"),
+      el("button", { class: "link", type: "button", onclick: () => setAll(true) }, t("ui.select_all")),
+      el("button", { class: "link", type: "button", onclick: () => setAll(false) }, t("ui.select_none"))),
     grid);
   chooseBtn.addEventListener("click", () => { p.expanded = !p.expanded; refresh(); });
   refresh();
-  const found = md.truncated ? `more than ${n} photos` : plural(n, "photo");
-  const via = { page: "found on the page", browser: "from the crow's nest", "gallery-dl": "via gallery-dl" }[md.source];
+  const found = md.truncated ? t("ui.photos_more", { count: n }) : t("ui.kind_photos", { count: n });
+  const via = { page: t("ui.via_page"), browser: t("ui.via_browser"), "gallery-dl": t("ui.via_gallery_dl") }[md.source];
   const meta = [md.uploader, found, via].filter(Boolean).join(" · ");
   return el("div", { class: "card preview" }, thumb(md.thumbnail, page),
     el("div", {},
       el("div", { class: "title" }, md.title || p.url),
-      el("div", { class: "meta" }, "Photos · ", meta),
-      md.truncated ? el("div", { class: "meta" }, `Showing the first ${n}. Salvage all gets every one.`) : null,
+      el("div", { class: "meta" }, t("ui.photos") + " · ", meta),
+      md.truncated ? el("div", { class: "meta" }, t("ui.showing_first", { count: n })) : null,
       el("div", { class: "actions" }, saveBtn, chooseBtn,
         md.streams && md.streams.length ? streamsBtn(p.url, md, "link") : null,
         md.links && md.links.length ? linkedBtn(p.url, md, "link") : null,
         md.source === "browser" ? null : crowsNestBtn(p.url, "link"),
-        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, "Dismiss"))),
+        el("button", { class: "link", type: "button", onclick: () => dismiss(key) }, t("ui.dismiss")))),
     picker);
 }
 
@@ -794,28 +842,29 @@ const isActive = (j) => !["done", "error", "canceled"].includes(j.state);
 const fileName = (p) => p.split(/[\\/]/).pop();
 
 function photoLine(j) {
-  const count = j.file_total ? `${j.files || 0} of ${plural(j.file_total, "photo")}` : plural(j.files || 0, "photo");
+  const files = j.files || 0;
   switch (j.state) {
-    case "queued": return "Waiting for a free slot…";
-    case "downloading": return [count, j.downloaded && fmtBytes(j.downloaded)].filter(Boolean).join(" · ");
-    case "done": return `${plural(j.files || 0, "photo")} saved`;
-    default: return j.files ? `${count} saved` : "";
+    case "queued": return t("ui.waiting_slot");
+    case "downloading": return [j.file_total ? t("ui.photos_progress", { count: files, total: j.file_total }) : t("ui.kind_photos", { count: files }),
+      j.downloaded && fmtBytes(j.downloaded)].filter(Boolean).join(" · ");
+    case "done": return t("ui.photos_saved", { count: files });
+    default: return !files ? "" : j.file_total ? t("ui.photos_saved_of", { count: files, total: j.file_total }) : t("ui.photos_saved", { count: files });
   }
 }
 
 function jobLine(j) {
   if (j.kind === "photos") return photoLine(j);
   switch (j.state) {
-    case "queued": return "Waiting for a free slot…";
-    case "processing": return j.audio ? "Converting audio…" : "Processing…";
+    case "queued": return t("ui.waiting_slot");
+    case "processing": return j.audio ? t("ui.converting_audio") : t("ui.processing");
     case "downloading": {
-      const parts = [j.total ? `${fmtBytes(j.downloaded)} of ${fmtBytes(j.total)}` : fmtBytes(j.downloaded)];
-      if (j.speed) parts.push(`${fmtBytes(j.speed)}/s`);
-      if (j.eta) parts.push(`${fmtEta(j.eta)} left`);
-      if (j.part > 1) parts.push(`part ${j.part}`);
+      const parts = [j.total ? t("ui.bytes_of", { done: fmtBytes(j.downloaded), total: fmtBytes(j.total) }) : fmtBytes(j.downloaded)];
+      if (j.speed) parts.push(t("ui.per_second", { size: fmtBytes(j.speed) }));
+      if (j.eta) parts.push(t("ui.time_left", { time: fmtEta(j.eta) }));
+      if (j.part > 1) parts.push(t("ui.part", { n: j.part }));
       return parts.filter(Boolean).join(" · ");
     }
-    case "done": return j.file_path ? fileName(j.file_path) : "Done";
+    case "done": return j.file_path ? fileName(j.file_path) : t("ui.done");
     default: return ""; // canceled/error: the badge says it
   }
 }
@@ -829,17 +878,18 @@ function progressBar(state, percent) {
 function jobActions(j, small) {
   const b = (label, onclick) => el("button", { type: "button", onclick }, label);
   return [
-    isActive(j) ? b("Cancel", () => post(`/api/jobs/${j.id}/cancel`)) : null,
-    (j.state === "done" || (j.kind === "photos" && j.files)) && j.file_path ? b("Show", () => post(`/api/jobs/${j.id}/reveal`)) : null,
-    (j.state === "error" || j.state === "canceled") ? b("Retry", () => post(`/api/jobs/${j.id}/retry`)) : null,
+    isActive(j) ? b(t("ui.cancel"), () => post(`/api/jobs/${j.id}/cancel`)) : null,
+    (j.state === "done" || (j.kind === "photos" && j.files)) && j.file_path ? b(t("ui.show"), () => post(`/api/jobs/${j.id}/reveal`)) : null,
+    (j.state === "error" || j.state === "canceled") ? b(t("ui.retry"), () => post(`/api/jobs/${j.id}/retry`)) : null,
   ].filter(Boolean).slice(0, small ? 1 : 3);
 }
 
 function jobCard(j) {
   // A photo job with an unknown total (a huge gallery) shows a moving bar and a count.
   const unknownTotal = j.kind === "photos" && !j.file_total;
-  const badgeText = { queued: "Queued", downloading: unknownTotal ? "Salvaging" : `${Math.floor(j.percent)}%`, processing: "Processing", done: "Done", error: "Failed", canceled: "Canceled" }[j.state];
-  const tag = j.audio ? "  · audio" : j.kind === "photos" ? "  · photos" : "";
+  const badgeText = { queued: t("ui.state_queued"), downloading: unknownTotal ? t("ui.state_salvaging") : fmtPercent(j.percent),
+    processing: t("ui.state_processing"), done: t("ui.done"), error: t("ui.state_failed"), canceled: t("ui.state_canceled") }[j.state];
+  const tag = j.audio ? `  · ${t("ui.tag_audio")}` : j.kind === "photos" ? `  · ${t("ui.tag_photos")}` : "";
   return el("div", { class: "card job" }, thumb(j.thumbnail, j.kind === "photos" ? j.url : j.page),
     el("div", { style: "min-width:0" },
       el("div", { class: "title" }, j.title, tag ? el("span", { class: "meta" }, tag) : null),
@@ -853,10 +903,12 @@ function jobCard(j) {
 
 function itemStatus(j) {
   switch (j.state) {
-    case "downloading": return `${Math.floor(j.percent)}%`;
-    case "processing": return "processing";
-    case "done": return "done";
-    case "error": return "failed";
+    case "downloading": return fmtPercent(j.percent);
+    case "queued": return t("ui.item_queued");
+    case "processing": return t("ui.item_processing");
+    case "done": return t("ui.item_done");
+    case "error": return t("ui.item_failed");
+    case "canceled": return t("ui.item_canceled");
     default: return j.state;
   }
 }
@@ -873,10 +925,10 @@ function groupCard(id, jobs) {
   const overall = active.length ? (running ? "downloading" : "queued") : "done";
 
   const summary = [
-    `${done} of ${n} done`,
-    running && `${running} downloading`,
-    failed && `${failed} failed`,
-    canceled && `${canceled} canceled`,
+    t("ui.group_done", { count: done, total: n }),
+    running && t("ui.group_downloading", { count: running }),
+    failed && t("ui.group_failed", { count: failed }),
+    canceled && t("ui.group_canceled", { count: canceled }),
   ].filter(Boolean).join(" · ");
   const expanded = state.expandedGroups.has(id);
   const toggle = () => { expanded ? state.expandedGroups.delete(id) : state.expandedGroups.add(id); renderJobs(); };
@@ -886,18 +938,18 @@ function groupCard(id, jobs) {
 
   return el("div", { class: "card job" }, thumb(pic.thumbnail, pic.page),
     el("div", { style: "min-width:0" },
-      el("div", { class: "title" }, first.group_title, el("span", { class: "meta" }, `  · ${plural(n, "item")}${first.audio ? " · audio" : ""}`)),
+      el("div", { class: "title" }, first.group_title, el("span", { class: "meta" }, `  · ${t("ui.items", { count: n })}${first.audio ? ` · ${t("ui.tag_audio")}` : ""}`)),
       // Finished with errors: show how much actually completed.
       overall === "done" && (failed || canceled) ? progressBar("downloading", (done / n) * 100) : progressBar(overall, percent),
       el("div", { class: "meta" },
-        el("span", { class: `badge ${active.length ? "" : failed ? "error" : "done"}` }, active.length ? `${Math.floor(percent)}%` : failed ? "Finished with errors" : "Done"),
+        el("span", { class: `badge ${active.length ? "" : failed ? "error" : "done"}` }, active.length ? fmtPercent(percent) : failed ? t("ui.finished_errors") : t("ui.done")),
         "  ", summary),
       failed && !active.length ? updateHint() : null),
     el("div", { class: "job-actions actions" },
-      active.length ? b("Cancel all", () => post(`/api/groups/${id}/cancel`)) : null,
-      (failed || canceled) ? b("Retry failed", () => jobs.filter((j) => j.state === "error" || j.state === "canceled").forEach((j) => post(`/api/jobs/${j.id}/retry`))) : null,
-      firstDone ? b("Show", () => post(`/api/jobs/${firstDone.id}/reveal`)) : null,
-      b(expanded ? "Hide items" : "Items", toggle, "link")),
+      active.length ? b(t("ui.cancel_all"), () => post(`/api/groups/${id}/cancel`)) : null,
+      (failed || canceled) ? b(t("ui.retry_failed"), () => jobs.filter((j) => j.state === "error" || j.state === "canceled").forEach((j) => post(`/api/jobs/${j.id}/retry`))) : null,
+      firstDone ? b(t("ui.show"), () => post(`/api/jobs/${firstDone.id}/reveal`)) : null,
+      b(expanded ? t("ui.hide_items") : t("ui.items_button"), toggle, "link")),
     expanded ? el("div", { class: "items", "data-group": id }, jobs.map((j) =>
       el("div", { class: "item no-check", title: j.state === "error" ? (j.problem ? problemText(j.problem) : j.error) : j.title },
         el("span", { class: "num" }, j.index),
@@ -908,7 +960,7 @@ function groupCard(id, jobs) {
 
 function renderJobs() {
   const box = $("jobs");
-  if (!state.jobs.size) { box.replaceChildren(el("div", { class: "empty" }, "Nothing yet.")); renderUpdate(); return; }
+  if (!state.jobs.size) { box.replaceChildren(el("div", { class: "empty" }, t("ui.nothing_yet"))); renderUpdate(); return; }
   // Single jobs and playlist groups, newest first; a group sorts by its first item.
   const groups = new Map(), cards = [];
   for (const j of state.jobs.values()) {
@@ -936,13 +988,16 @@ let meta = {};
 function openSettings() {
   const s = state.settings;
   $("s-out").value = s.output_dir;
-  fillSelect($("s-quality"), meta.video_qualities, s.video_quality, { best: "Best available", 2160: "4K (2160p)", 1440: "1440p", 1080: "1080p", 720: "720p", 480: "480p" });
+  fillSelect($("s-quality"), meta.video_qualities, s.video_quality, { best: t("ui.quality_best"), 2160: "4K (2160p)", 1440: "1440p", 1080: "1080p", 720: "720p", 480: "480p" });
   $("s-compat").checked = s.compatible_mp4;
   fillSelect($("s-audio"), meta.audio_formats, s.audio_format);
   const detected = new Set(meta.browsers);
   const browsers = ["", ...meta.supported_browsers.filter((b) => detected.has(b)), "whydah", ...meta.supported_browsers.filter((b) => !detected.has(b))];
-  const labels = { "": "Don't use cookies", whydah: t("ui.cookies_own") };
-  for (const b of meta.supported_browsers) labels[b] = b[0].toUpperCase() + b.slice(1) + (detected.has(b) ? "" : " (not detected)");
+  const labels = { "": t("ui.cookies_none"), whydah: t("ui.cookies_own") };
+  for (const b of meta.supported_browsers) {
+    const name = b[0].toUpperCase() + b.slice(1);
+    labels[b] = detected.has(b) ? name : t("ui.not_detected", { browser: name });
+  }
   fillSelect($("s-browser"), browsers, s.browser_cookies, labels);
   $("s-signin-error").textContent = "";
   renderSignIn();
@@ -1081,14 +1136,17 @@ async function showHistory() {
 
 function renderClipHint() {
   $("clip-hint").textContent = state.settings && state.settings.watch_clipboard
-    ? "Watching your clipboard: copy a link from a watched site and it will appear here."
-    : "Clipboard watching is off. Turn it on in Settings.";
+    ? t("ui.clip_on")
+    : t("ui.clip_off");
 }
 
 // ---- wiring ----
+let pageVersion = null; // the version of Whydah this page came from
 async function loadState() {
   const s = await api("/api/state");
-  meta = s; state.settings = s.settings; state.tools = s.tools; state.signin = s.signin;
+  if (pageVersion && s.version !== pageVersion) { location.reload(); return; } // updated: get its page
+  pageVersion = s.version;
+  meta = s; state.settings = s.settings; state.tools = s.tools; state.signin = s.signin; state.self = s.self_update;
   state.jobs = new Map(s.jobs.map((j) => [j.id, j]));
   renderTools(); renderJobs(); renderClipHint();
 }
@@ -1109,6 +1167,7 @@ function connect() {
     }
     else if (ev.type === "url_detected") inspect(ev.data.url);
     else if (ev.type === "links_progress") linksProgress(ev.data);
+    else if (ev.type === "self_update") { state.self = ev.data; renderSelfUpdate(); }
     else if (ev.type === "signin_status") {
       state.signin = ev.data; renderSignIn();
       for (const p of state.previews.values()) if (p.status === "loading" && p.mode !== "links") p.el = null; // the waiting note
@@ -1145,14 +1204,15 @@ $("clear").addEventListener("click", async () => {
   state.jobs = new Map(jobs.map((j) => [j.id, j])); renderJobs();
 });
 $("quit").addEventListener("click", async () => {
-  if (!confirm("Quit Whydah? Running downloads will stop.")) return;
+  if (!confirm(t("ui.quit_confirm"))) return;
   await api("/api/quit", { method: "POST" }).catch(() => {});
-  document.body.replaceChildren(el("main", {}, el("p", { class: "hint" }, "Whydah has made port and shut down. You can close this tab.")));
+  document.body.replaceChildren(el("main", {}, el("p", { class: "hint" }, t("ui.quit_done"))));
 });
 
 if (!token) {
   $("tools-banner").hidden = false; $("tools-banner").classList.add("error");
   $("tools-banner").textContent = "This page needs to be opened from the app. Run Whydah again to get a working link.";
+  loadMessages().then(() => { $("tools-banner").textContent = t("ui.no_token"); }).catch(() => {});
 } else {
   loadMessages().catch(() => {}) // without them failures show their keys; everything else still works
     .then(() => loadState())

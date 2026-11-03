@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"whydah/internal/config"
 	"whydah/internal/engine"
 	"whydah/internal/events"
+	"whydah/internal/selfupdate"
 	"whydah/internal/tools"
 	"whydah/internal/web"
 )
@@ -35,31 +37,39 @@ var version = "dev" // set with -ldflags "-X main.version=..."
 
 const defaultPort = 47823
 
+// restarting is set once an update is installed: when run has shut
+// everything down, Whydah starts again as the new version.
+var restarting atomic.Bool
+
+// restartedEnv marks a Whydah started by an update's restart, which
+// doesn't open another browser tab: the open one reconnects.
+const restartedEnv = "WHYDAH_RESTARTED"
+
 func main() {
-	os.Exit(run())
+	exe, _ := os.Executable() // now, while it's still the running file's path
+	code := run()
+	if restarting.Load() {
+		if err := restart(exe); err != nil {
+			fmt.Fprintln(os.Stderr, cli.T("cli.error", "detail", err.Error()))
+			code = 1
+		}
+	}
+	os.Exit(code)
 }
 
 func run() int {
-	audio := flag.Bool("audio", false, "CLI: extract audio only")
-	linked := flag.Bool("linked", false, "CLI: check the videos a page's thumbnails link to (spyglass lists them, salvage downloads them)")
-	crowsNest := flag.Bool("crows-nest", false, "CLI: find photos by loading each page in a hidden browser, for pages built by scripts")
-	output := flag.String("output", "", "download folder (overrides settings for this run)")
-	browser := flag.String("browser", "", "use cookies from this browser for this run (chrome, firefox, safari, ..., or whydah for Whydah's sign-in browser)")
-	port := flag.Int("port", defaultPort, "UI port (falls back to a random port if busy)")
-	noBrowser := flag.Bool("no-browser", false, "don't open the UI in a browser")
-	showVersion := flag.Bool("version", false, "print version and exit")
+	cli.SetLanguage("") // the system's, until the settings are read
+	T := cli.T
+	audio := flag.Bool("audio", false, T("cli.flag_audio"))
+	linked := flag.Bool("linked", false, T("cli.flag_linked"))
+	crowsNest := flag.Bool("crows-nest", false, T("cli.flag_crows_nest"))
+	output := flag.String("output", "", T("cli.flag_output"))
+	browser := flag.String("browser", "", T("cli.flag_browser"))
+	port := flag.Int("port", defaultPort, T("cli.flag_port"))
+	noBrowser := flag.Bool("no-browser", false, T("cli.flag_no_browser"))
+	showVersion := flag.Bool("version", false, T("cli.flag_version"))
 	flag.Usage = func() {
-		fmt.Fprint(os.Stderr, `Whydah salvages video, audio and photos from the web.
-
-Usage:
-  whydah                          open the UI in your browser
-  whydah salvage [flags] URL...   download everything at each link (or just: whydah URL...)
-  whydah spyglass URL...          show what each link has, without downloading
-  whydah refit                    update the helper tools to their latest releases
-  whydah sign-in [URL]            open Whydah's own browser to sign in to sites (at URL)
-
-Flags:
-`)
+		fmt.Fprintln(os.Stderr, T("cli.usage"))
 		flag.PrintDefaults()
 	}
 	// Flags may come before or after the subcommand.
@@ -68,7 +78,7 @@ Flags:
 	command, urls := "", flag.Args()
 	if len(urls) > 0 {
 		switch urls[0] {
-		case "salvage", "spyglass", "refit", "sign-in", "help":
+		case "salvage", "spyglass", "refit", "update", "sign-in", "help":
 			command = urls[0]
 			_ = flag.CommandLine.Parse(urls[1:])
 			urls = flag.Args()
@@ -85,35 +95,42 @@ Flags:
 		flag.Usage()
 		return 0
 	case (command == "salvage" || command == "spyglass") && len(urls) == 0:
-		fmt.Fprintf(os.Stderr, "whydah %s needs at least one link\n", command)
+		fmt.Fprintln(os.Stderr, T("cli.needs_link", "command", command))
 		return 2
 	case command == "refit" && len(urls) > 0:
-		fmt.Fprintln(os.Stderr, "whydah refit takes no links")
+		fmt.Fprintln(os.Stderr, T("cli.refit_no_links"))
+		return 2
+	case command == "update" && len(urls) > 0:
+		fmt.Fprintln(os.Stderr, T("cli.update_no_links"))
 		return 2
 	case command == "sign-in" && len(urls) > 1:
-		fmt.Fprintln(os.Stderr, "whydah sign-in takes at most one link")
+		fmt.Fprintln(os.Stderr, T("cli.signin_one_link"))
 		return 2
 	}
 
 	appDir, err := config.AppDir()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, T("cli.error", "detail", err.Error()))
 		return 1
 	}
 	cacheDir, err := config.CacheDir()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, T("cli.error", "detail", err.Error()))
 		return 1
 	}
 	closeLog := setupLogging(filepath.Join(appDir, "app.log"))
 	defer closeLog()
 	slog.Info("starting", "version", version, "args", os.Args[1:])
+	selfupdate.Tidy()
+	restarted := os.Getenv(restartedEnv) != ""
+	os.Unsetenv(restartedEnv)
 
 	settings, err := config.Load()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error loading settings:", err)
+		fmt.Fprintln(os.Stderr, T("cli.error_settings", "detail", err.Error()))
 		return 1
 	}
+	cli.SetLanguage(settings.Get().Language)
 	if *output != "" || *browser != "" {
 		settings.Override(func(s *config.Settings) {
 			if *output != "" {
@@ -132,29 +149,35 @@ Flags:
 
 	token, err := loadToken(filepath.Join(appDir, "ui-token"))
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, T("cli.error", "detail", err.Error()))
 		return 1
 	}
 
-	running := (command == "" || command == "refit" || command == "sign-in") && web.PingExisting(*port)
+	running := (command == "" || command == "refit" || command == "update" || command == "sign-in") && web.PingExisting(*port)
 	if command == "sign-in" && running {
-		cli.SetLanguage(settings.Get().Language)
 		if err := web.SignInExisting(*port, token, strings.Join(urls, "")); err != nil {
 			fmt.Fprintln(os.Stderr, "✗", cli.Explained(err))
 			return 1
 		}
-		fmt.Println("Opened the sign-in window of the Whydah that's running. Close it when you're done.")
+		fmt.Println(T("cli.signin_handed"))
 		return 0
 	}
 	if command == "refit" && running {
 		// The update lock is per process, so let the running app do it safely.
-		fmt.Println("Whydah is running; use Refit in its window, or quit it first.")
+		fmt.Println(T("cli.refit_running"))
 		return 1
+	}
+	if command == "update" {
+		if running { // it would be replaced from under it
+			fmt.Println(T("cli.update_running"))
+			return 1
+		}
+		return cli.Update(ctx, selfupdate.New(version, nil))
 	}
 	// A second launch just reopens the UI of the instance already running.
 	if running {
 		url := fmt.Sprintf("http://127.0.0.1:%d/#t=%s", *port, token)
-		fmt.Println("Whydah is already running:", url)
+		fmt.Println(T("cli.already_running", "url", url))
 		if !*noBrowser {
 			_ = web.OpenPath(url)
 		}
@@ -175,7 +198,6 @@ Flags:
 	if command == "refit" {
 		return cli.Refit(ctx, tm)
 	}
-	cli.SetLanguage(settings.Get().Language)
 	eng := engine.New(settings, tm, hub)
 	defer eng.Shutdown(10 * time.Second)
 
@@ -192,24 +214,27 @@ Flags:
 	eng.Persist(filepath.Join(appDir, "queue.json"))
 	go clipboard.Watch(ctx, settings, hub)
 	go tm.WatchForUpdates(ctx)
-	srv := &web.Server{Settings: settings, Engine: eng, Tools: tm, Hub: hub, Token: token, Quit: stop}
+	self := selfupdate.New(version, hub)
+	go self.Watch(ctx)
+	srv := &web.Server{Settings: settings, Engine: eng, Tools: tm, Self: self, Hub: hub, Token: token, Version: version,
+		Quit: stop, Restart: func() { restarting.Store(true); stop() }}
 	ln, err := srv.Listen(*port)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, T("cli.error", "detail", err.Error()))
 		return 1
 	}
-	fmt.Println("Whydah is running at", srv.URL())
-	fmt.Println("Keep this window open while downloading. Press Ctrl+C (or Quit in the UI) to stop.")
-	if !*noBrowser {
+	fmt.Println(T("cli.running_at", "url", srv.URL()))
+	fmt.Println(T("cli.keep_open"))
+	if !*noBrowser && !restarted {
 		if err := web.OpenPath(srv.URL()); err != nil {
-			fmt.Println("Couldn't open a browser automatically; open the link above.")
+			fmt.Println(T("cli.no_browser_open"))
 		}
 	}
 	if err := srv.Serve(ctx, ln); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, T("cli.error", "detail", err.Error()))
 		return 1
 	}
-	fmt.Println("Stopped.")
+	fmt.Println(T("cli.stopped"))
 	return 0
 }
 

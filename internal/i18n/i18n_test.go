@@ -19,6 +19,8 @@ func TestMatch(t *testing.T) {
 		{[]string{"en-US", "fr"}, "en"},
 		{[]string{"en_GB.UTF-8"}, "en"},
 		{[]string{"qaa-YY", "en;q=0.5"}, "en"}, // one we don't have (qaa is reserved for private use), then one we do
+		{[]string{"fr-CA"}, "fr"},
+		{[]string{"es_MX.UTF-8", "en"}, "es"},
 		{[]string{"", "C"}, "en"},
 		{nil, "en"},
 	} {
@@ -45,6 +47,12 @@ func TestT(t *testing.T) {
 	many := T("en", "error.photos_partial", map[string]string{"count": "3"})
 	if one != "Saved 1 photo, but some couldn't be saved." || many != "Saved 3 photos, but some couldn't be saved." {
 		t.Errorf("plurals: %q, %q", one, many)
+	}
+	if got := T("fr", "ui.history_count", map[string]string{"count": "0"}); got != "0 téléchargement" { // French counts 0 as one
+		t.Errorf("French 0 = %q", got)
+	}
+	if got := T("es", "ui.history_count", map[string]string{"count": "0"}); got != "0 descargas" {
+		t.Errorf("Spanish 0 = %q", got)
 	}
 	if got := T("en", "no.such.key", nil); got != "no.such.key" {
 		t.Errorf("missing key = %q", got)
@@ -108,12 +116,12 @@ func TestCatalogs(t *testing.T) {
 }
 
 // usedKeys finds the message keys in the source: i18n.New("..."),
-// WithHint("..."), quoted "error.*", "hint.*" and "ui.*" keys in Go, and
-// t("...") and data-t="..." in the UI.
+// WithHint("..."), quoted "error.*", "hint.*", "ui.*", "setup.*" and "cli.*" keys in Go, and
+// t("..."), data-t="...", data-t-title="..." and data-t-placeholder="..." in the UI.
 func usedKeys(t *testing.T) []string {
 	root := filepath.Join("..", "..")
-	goKey := regexp.MustCompile(`"((?:error|hint|ui)\.[a-z_.]+)"`)
-	uiKey := regexp.MustCompile(`\bt\("([a-z_.]+)"|data-t="([a-z_.]+)"`)
+	goKey := regexp.MustCompile(`"((?:error|hint|ui|setup|cli)\.[a-z_.]+)"`)
+	uiKey := regexp.MustCompile(`\bt\("([a-z_.]+)"|data-t(?:-title|-placeholder)?="([a-z_.]+)"`)
 	seen := map[string]bool{}
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -166,4 +174,59 @@ func contains(list []string, s string) bool {
 func sorted(list []string) string {
 	sort.Strings(list)
 	return strings.Join(list, " ")
+}
+
+// TestUIText looks for text in the UI that isn't from the catalog: text in
+// the page's elements not marked data-t, and quoted words where the script
+// builds elements, labels, titles, alerts and confirmations. It's a
+// heuristic; allowed lists what it flags that isn't for translating.
+func TestUIText(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "web", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := []string{
+		"Whydah",         // the name
+		"yt-dlp ",        // the footer's tool names and versions
+		" (${u.channel",  // the yt-dlp release channel's own name
+		" · gallery-dl ", //
+		" · headless Chrome ",
+		"Harbour Lights", // the sample video the file name example uses
+		"This page needs to be opened from the app.", // shown until the messages load, if they can
+	}
+	ok := func(text string) bool {
+		for _, a := range allowed {
+			if strings.HasPrefix(text, a) {
+				return true
+			}
+		}
+		return false
+	}
+	html, script, _ := strings.Cut(string(data), "<script>")
+	html = regexp.MustCompile(`(?s)<style>.*?</style>`).ReplaceAllString(html, "")
+	for _, m := range regexp.MustCompile(`<\w+([^>]*)>([^<]*[A-Za-z]{2,}[^<]*)<`).FindAllStringSubmatch(html, -1) {
+		if text := strings.TrimSpace(m[2]); !strings.Contains(m[1], "data-t=") && !ok(text) {
+			t.Errorf("index.html: %q isn't marked data-t", text)
+		}
+	}
+	for _, m := range regexp.MustCompile(`\s(?:title|placeholder|aria-label|alt)="([^"]*[A-Za-z]{2,}[^"]*)"`).FindAllStringSubmatch(html, -1) {
+		if !ok(m[1]) {
+			t.Errorf("index.html: attribute %q isn't from the catalog (use data-t-title or data-t-placeholder)", m[1])
+		}
+	}
+	for _, re := range []string{
+		`\},\s*"([^"]*[A-Za-z]{2,}[^"]*)"\s*[,)]`, // el(tag, props, "text")
+		`\(\s*"([A-Z][^"]*[a-z][^"]*)"`,           // a label passed to a helper: btn("Text", ...)
+		"\\},\\s*`([^`]*[A-Za-z]{2,}[^`]*)`\\s*[,)]",
+		`(?:title|placeholder|"aria-label"|alt):\s*"([^"]*[A-Za-z]{2,}[^"]*)"`,
+		"(?:alert|confirm)\\(\\s*[\"`]([^\"`]*)",
+		"textContent\\s*=\\s*[\"`]([^\"`]*[A-Za-z]{2,})",
+		"\\.append\\(\\s*[\"`]([^\"`]*[A-Za-z]{2,}[^\"`]*)",
+	} {
+		for _, m := range regexp.MustCompile(re).FindAllStringSubmatch(script, -1) {
+			if !ok(m[1]) {
+				t.Errorf("index.html script: %q isn't from the catalog (use t())", m[1])
+			}
+		}
+	}
 }

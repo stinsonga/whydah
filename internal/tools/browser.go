@@ -155,11 +155,11 @@ func (m *Manager) Browser(ctx context.Context) (string, error) {
 		return p, nil
 	}
 	if err := m.installHeadless(ctx, ""); err != nil {
-		m.update(func(s *Status) { s.Stage = "" })
+		m.update(func(s *Status) { s.Stage = nil })
 		return "", fmt.Errorf("getting headless Chrome: %w", err)
 	}
 	m.update(func(s *Status) {
-		s.Stage = ""
+		s.Stage = nil
 		s.HeadlessVer = m.headlessVersion()
 		s.Update.Supported = true
 	})
@@ -224,7 +224,7 @@ func (m *Manager) installHeadless(ctx context.Context, current string) error {
 	if err := m.downloadFile(ctx, link, file, "headless Chrome"); err != nil {
 		return err
 	}
-	m.stage("Unpacking headless Chrome")
+	m.stage("setup.unpacking", "tool", "headless Chrome")
 	out := filepath.Join(tmp, "x")
 	if err := extractZipTree(file, out); err != nil {
 		return err
